@@ -13,6 +13,8 @@ from pptx.dml.color import RGBColor
 from pptx.enum.dml import MSO_FILL
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
+import motor_ia
+
 class AppPaiVega(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -140,6 +142,59 @@ class AppPaiVega(QMainWindow):
             pixmap = QPixmap(path)
             self.lbl_bg_preview.setPixmap(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             self.lbl_bg_preview.setStyleSheet("border: 1px solid #555;") # Tira o tracejado
+
+    def gerar_com_ia(self):
+        # Famakiana ny lohahevitra (Ler tema)
+        tema = self.txt_tema.text()
+        if not tema:
+            QMessageBox.warning(self, "Fampitandremana", "Azafady, ampidiro aloha ny lohahevitra!")
+            return
+        
+        QMessageBox.information(self, "Mamorona...", "Mamorona ny famelabelaranao ny IA. Mety haharitra segondra vitsy izany...")
+        
+        # Antsoy ny motera IA (Chamar motor IA)
+        roteiro = motor_ia.gerar_roteiro_slides(tema)
+        if not roteiro:
+            QMessageBox.critical(self, "Fahadisoana", "Tsy nahomby ny fanamboarana tamin'ny alalan'ny IA.")
+            return
+            
+        prs = Presentation()
+        
+        for i, slide_data in enumerate(roteiro):
+            # Manampy slide vaovao (Add slide)
+            slide = prs.slides.add_slide(prs.slide_layouts[1]) 
+            
+            title_shape = slide.shapes.title
+            body_shape = slide.placeholders[1]
+            
+            title_shape.text = slide_data.get("titulo", "")
+            body_shape.text = slide_data.get("texto", "")
+            
+            palavra_chave = slide_data.get("palavra_chave_imagem", "")
+            if palavra_chave:
+                img_path = motor_ia.baixar_imagem_pexels(palavra_chave, i)
+                if img_path:
+                    # Ampidiro ny sary avy amin'ny Pexels (Inserir foto do pexels)
+                    pic = slide.shapes.add_picture(img_path, 0, 0)
+                    
+                    # Fanitsiana ny haben'ny sary (Ajuste de tamanho pra não ficar enorme)
+                    ratio = prs.slide_width / 2.5 / pic.width
+                    pic.width = int(pic.width * ratio)
+                    pic.height = int(pic.height * ratio)
+                    
+                    # Fametrahana ny sary eo afovoany ambany (Centralizar embaixo)
+                    pic.left = int((prs.slide_width - pic.width) / 2)
+                    pic.top = int(prs.slide_height - pic.height - 200000)
+
+        # Tehirizo ao anaty fampirimana vonjimaika ny rakitra (Salva usando caminho absoluto)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        temp_path = os.path.join(base_dir, "apresentacao_ia_temp.pptx")
+        prs.save(temp_path)
+        
+        # Joga o caminho para a variável da UI pra ele continuar editando (Cores, BG, etc)
+        self.pptx_path = temp_path
+        self.lbl_pptx.setText("Rakitra IA vonona: apresentacao_ia_temp.pptx")
+        QMessageBox.information(self, "Fahombiazana", "Vonona ny slide IA! Azonao atao ny mampihatra ireo loko sy sary ambadika ankehitriny.")
 
     def process_and_save(self):
         if not self.pptx_path:
