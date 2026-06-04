@@ -3,7 +3,7 @@ import os
 import subprocess
 from PySide6.QtWidgets import (
     QApplication, QDialog, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QLabel, QFileDialog, QColorDialog, QMessageBox,
+    QPushButton, QLabel, QFileDialog, QColorDialog, QMessageBox, QProgressDialog,
     QCheckBox, QSpinBox, QTextEdit, QScrollArea, QListWidget, QSlider
 )
 from PySide6.QtGui import QColor, QPixmap, QFont
@@ -271,33 +271,68 @@ class AppPaiVega(QMainWindow):
             QMessageBox.warning(self, "Aviso", "Por favor, introduza o tema primeiro!")
             return
         
-        QMessageBox.information(self, "Gerando...", "A IA está pensando e buscando opções de imagens. Isso pode levar alguns segundos...")
+        # 1. Configura a Barra de Progresso
+        progress = QProgressDialog("Conectando com a IA (Gemini)...", "Cancelar", 0, 100, self)
+        progress.setWindowTitle("Gerando Apresentação")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setAutoClose(True) # Fecha sozinha quando chegar no 100
+        progress.setValue(5)
+        progress.show()
+        QApplication.processEvents() # Força a tela a atualizar para não travar
         
-        roteiro = motor_ia.gerar_roteiro_slides(tema)
-        if not roteiro:
-            QMessageBox.critical(self, "Erro", "Falha ao estruturar a apresentação com a IA.")
+        # 2. Chama a IA
+        sucesso, roteiro_ou_erro = motor_ia.gerar_roteiro_slides(tema)
+        
+        if progress.wasCanceled(): return
+        
+        # Se deu erro, avisa EXATAMENTE o que foi
+        if not sucesso:
+            progress.close()
+            QMessageBox.critical(self, "Erro Detalhado na IA", f"Falha ao gerar:\n\n{roteiro_ou_erro}")
             return
             
-        # Baixa as opções de imagens para a janela de seleção
+        roteiro = roteiro_ou_erro
+        total_slides = len(roteiro)
+        progress.setValue(20)
+        progress.setLabelText("Estrutura pronta! Buscando opções de imagens (Pexels)...")
+        QApplication.processEvents()
+
+        # 3. Baixa as imagens e atualiza a barra
         slide_images_dict = {}
         for i, slide_data in enumerate(roteiro):
+            if progress.wasCanceled(): return
+            
             palavra_chave = slide_data.get("palavra_chave_imagem", "")
             if palavra_chave:
+                progress.setLabelText(f"Buscando imagens para o slide {i + 1} de {total_slides}...")
+                QApplication.processEvents()
+                
                 paths = motor_ia.baixar_imagem_pexels(palavra_chave, i)
                 if paths:
                     slide_images_dict[i] = paths
+            
+            # Matemática da barra: vai de 20% até 85% durante o download
+            progresso_atual = 20 + int(((i + 1) / total_slides) * 65)
+            progress.setValue(progresso_atual)
 
-        # Abre a janela pro pai escolher as imagens
+        progress.setValue(90)
+        progress.setLabelText("Preparando janela de escolhas...")
+        QApplication.processEvents()
+
+        # Fecha a barra para abrir a janela de escolhas do pai
+        progress.close()
+
+        # 4. Abre a janela de escolhas
         selected_images = {}
         if slide_images_dict:
             dialog = ImageSelectionDialog(slide_images_dict, self)
             if dialog.exec() == QDialog.Accepted:
                 selected_images = dialog.selected_images
             else:
-                QMessageBox.warning(self, "Aviso", "Geração cancelada.")
+                QMessageBox.warning(self, "Aviso", "Geração cancelada na escolha de imagens.")
                 return
 
-        # Monta os slides no PPTX com as escolhas feitas
+        # 5. Monta o PPTX
         prs = Presentation()
         for i, slide_data in enumerate(roteiro):
             slide = prs.slides.add_slide(prs.slide_layouts[1]) 
@@ -307,7 +342,6 @@ class AppPaiVega(QMainWindow):
             title_shape.text = slide_data.get("titulo", "")
             body_shape.text = slide_data.get("texto", "")
             
-            # Insere a imagem que ele escolheu na janela
             if i in selected_images:
                 img_path = selected_images[i]
                 try:
@@ -315,23 +349,19 @@ class AppPaiVega(QMainWindow):
                     ratio = prs.slide_width / 2.5 / pic.width
                     pic.width = int(pic.width * ratio)
                     pic.height = int(pic.height * ratio)
-                    
                     pic.left = int((prs.slide_width - pic.width) / 2)
                     pic.top = int(prs.slide_height - pic.height - 200000)
                 except Exception as e:
                     print(f"Erro na imagem: {e}")
 
-        # Salva o arquivo temporário
         base_dir = os.path.dirname(os.path.abspath(__file__))
         temp_path = os.path.join(base_dir, "apresentacao_ia_temp.pptx")
         prs.save(temp_path)
         
-        # Puxa o arquivo gerado pra interface principal continuar a edição
         self.pptx_path = temp_path
         self.lbl_pptx.setText("Apresentação gerada com IA carregada e pronta para edição!")
         QMessageBox.information(self, "Sucesso", "Slides montados! O PowerPoint será aberto para você visualizar antes de continuar.")
 
-        # Abre o arquivo no PowerPoint do PC dele automaticamente
         try:
             if os.name == 'nt':
                 os.startfile(temp_path)

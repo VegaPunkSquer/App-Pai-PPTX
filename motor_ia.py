@@ -11,16 +11,16 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
 # A função velha configurar_gemini() SAIU. Não precisamos mais dela.
 
-def gerar_roteiro_slides(tema, num_slides=5):
-    """Pede ao Gemini para estruturar a apresentação e retornar um JSON."""
+def gerar_roteiro_slides(tema):
+    """Pede ao Gemini para estruturar a apresentação e retornar sucesso e os dados."""
     
-    # ENTRA: Inicializamos o cliente novo passando a chave direto nele
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     prompt = f"""
     Atue como um especialista em conteúdo educacional. 
-    Crie uma apresentação de {num_slides} slides sobre o tema: "{tema}".
-    Retorne APENAS um JSON válido, sem formatação markdown ou textos extras. 
+    Crie uma estrutura de apresentação baseada no seguinte pedido: "{tema}".
+    (Se o usuário não especificar a quantidade de slides, faça 5 por padrão).
+    Retorne APENAS um array JSON válido. 
     O formato deve ser estritamente uma lista de dicionários com as chaves abaixo:
     [
         {{
@@ -32,17 +32,24 @@ def gerar_roteiro_slides(tema, num_slides=5):
     """
     
     try:
-        # ENTRA: Nova sintaxe da API para chamar o modelo
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt
         )
-        # Limpa possível formatação markdown (```json ... ```) caso a IA devolva
-        texto_limpo = response.text.replace("```json", "").replace("```", "").strip()
-        return json.loads(texto_limpo)
+        
+        texto = response.text
+        # Garante que vai pegar só a lista JSON, mesmo que a IA mande texto antes ou depois
+        inicio = texto.find('[')
+        fim = texto.rfind(']') + 1
+        
+        if inicio != -1 and fim != 0:
+            texto_limpo = texto[inicio:fim]
+            return True, json.loads(texto_limpo)
+        else:
+            return False, f"A IA não retornou um formato válido.\nResposta bruta:\n{texto}"
+            
     except Exception as e:
-        print(f"Erro ao gerar conteúdo com o Gemini: {e}")
-        return []
+        return False, f"Erro ao conectar com o Gemini:\n{str(e)}"
 
 def baixar_imagem_pexels(palavra_chave, indice_slide):
     """Busca 3 imagens relacionadas no Pexels e baixa temporariamente na pasta raiz."""
