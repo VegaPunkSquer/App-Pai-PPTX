@@ -11,17 +11,18 @@ from PySide6.QtCore import Qt, QSize
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.dml import MSO_FILL
-from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 from pptx.util import Pt # Importação crucial para formatar fontes profissionalmente
 import motor_ia
 
 class ImageSelectionDialog(QDialog):
     """Janela flutuante com feedback visual claro para a escolha das imagens."""
-    def __init__(self, slide_images_dict, parent=None):
+    def __init__(self, slide_images_dict, roteiro, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Escolha as Imagens dos Slides")
         self.resize(900, 700)
         self.slide_images_dict = slide_images_dict
+        self.roteiro = roteiro
         self.selected_images = {} # {indice_slide: caminho_escolhido}
 
         self.init_ui()
@@ -41,6 +42,9 @@ class ImageSelectionDialog(QDialog):
         # Área de Opções de Imagens na Direita
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
+        # Opcional: Garante que a barra horizontal não apareça e force o Wrap
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        
         self.container_opcoes = QWidget()
         self.layout_opcoes = QVBoxLayout(self.container_opcoes)
         self.layout_opcoes.setAlignment(Qt.AlignTop)
@@ -71,9 +75,8 @@ class ImageSelectionDialog(QDialog):
         # Limpeza segura do layout anterior
         while self.layout_opcoes.count():
             item = self.layout_opcoes.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
+            if item.widget():
+                item.widget().deleteLater()
 
         # Pega o índice real do slide baseado na linha clicada
         try:
@@ -82,10 +85,25 @@ class ImageSelectionDialog(QDialog):
         except IndexError:
             return
 
-        lbl_instrucao = QLabel(f"Selecione a imagem para ilustrar o Slide {slide_idx + 1}:")
-        lbl_instrucao.setFont(QFont("Arial", 16, QFont.Bold))
-        lbl_instrucao.setStyleSheet("padding-bottom: 10px;")
+        # Puxa o contexto do Roteiro para o pai saber do que o slide fala
+        dados_slide = self.roteiro[slide_idx]
+        titulo_slide = dados_slide.get("titulo", "Sem Título")
+        texto_resumo = dados_slide.get("texto", "")[:120] + "..." # Pega as primeiras palavras
+        
+        lbl_instrucao = QLabel(f"Slide {slide_idx + 1}: {titulo_slide}")
+        # Correção da tipagem rigorosa do PySide6 (usando kwarg weight)
+        lbl_instrucao.setFont(QFont("Arial", 16, weight=QFont.Bold))
+        lbl_instrucao.setStyleSheet("padding-bottom: 2px;")
+        lbl_instrucao.setWordWrap(True) # <- SALVA VIDAS: Impede que o texto estique a tela
         self.layout_opcoes.addWidget(lbl_instrucao)
+
+        lbl_contexto = QLabel(f"Contexto: {texto_resumo}")
+        # Correção da tipagem rigorosa do PySide6 (usando kwarg italic em vez do enum no arg posicional)
+        lbl_contexto.setFont(QFont("Arial", 11, italic=True))
+        # Cor alterada para #b0b0b0 (cinza claro) para ficar perfeitamente legível no seu Dark Mode
+        lbl_contexto.setStyleSheet("padding-bottom: 15px; color: #b0b0b0;")
+        lbl_contexto.setWordWrap(True) # <- SALVA VIDAS 2
+        self.layout_opcoes.addWidget(lbl_contexto)
 
         # Desenha as 3 opções com botões grandes
         for caminho in caminhos:
@@ -105,7 +123,7 @@ class ImageSelectionDialog(QDialog):
             if self.selected_images.get(slide_idx) == caminho:
                 btn_select.setText("✅ IMAGEM SELECIONADA")
                 btn_select.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 12px; font-size: 14px; border-radius: 5px;")
-                container_img.setStyleSheet("background-color: #e5f1fb; border: 2px solid #28a745; border-radius: 10px;")
+                container_img.setStyleSheet("background-color: #1e3a2b; border: 2px solid #28a745; border-radius: 10px;")
             else:
                 btn_select.setText("Escolher esta imagem")
                 btn_select.setStyleSheet("background-color: #e0e0e0; color: black; font-weight: bold; padding: 12px; font-size: 14px; border-radius: 5px;")
@@ -333,10 +351,18 @@ class AppPaiVega(QMainWindow):
 
         selected_images = {}
         if slide_images_dict:
-            dialog = ImageSelectionDialog(slide_images_dict, self)
+            # Passamos a variável 'roteiro' para dentro do Dialog
+            dialog = ImageSelectionDialog(slide_images_dict, roteiro, self)
             if dialog.exec() == QDialog.Accepted:
                 selected_images = dialog.selected_images
             else:
+                # Se ele cancelar a janela, também apagamos o lixo antes de sair
+                try:
+                    for caminhos in slide_images_dict.values():
+                        for c in caminhos:
+                            if os.path.exists(c): os.remove(c)
+                except Exception: pass
+                
                 QMessageBox.warning(self, "Aviso", "Geração cancelada.")
                 return
 
@@ -353,7 +379,7 @@ class AppPaiVega(QMainWindow):
             slide = prs.slides.add_slide(prs.slide_layouts[6]) 
             
             # 1. Barra Lateral Decorativa (Dá um tom premium de template corporativo)
-            barra_lateral = slide.shapes.add_shape(MSO_SHAPE_TYPE.RECTANGLE, 0, 0, int(prs.slide_width * 0.02), prs.slide_height)
+            barra_lateral = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, int(prs.slide_width * 0.02), prs.slide_height)
             barra_lateral.fill.solid()
             barra_lateral.fill.fore_color.rgb = RGBColor(43, 92, 143) # Azul corporativo
             barra_lateral.line.fill.background() # Remove a borda preta feia
@@ -421,6 +447,14 @@ class AppPaiVega(QMainWindow):
         temp_path = os.path.join(base_dir, "apresentacao_ia_temp.pptx")
         prs.save(temp_path)
         
+        # O LIXEIRO: Apaga todas as imagens (.jpg) que baixamos do Pexels
+        # porque elas já estão magicamente embutidas dentro do PPTX agora!
+        try:
+            for caminhos in slide_images_dict.values():
+                for c in caminhos:
+                    if os.path.exists(c): os.remove(c)
+        except Exception: pass
+
         self.pptx_path = temp_path
         self.lbl_pptx.setText("✨ Apresentação carregada e pronta para edição final!")
         

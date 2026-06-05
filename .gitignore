@@ -4,3 +4,5 @@
 *.pptx
 .env
 .spec
+*.jpg
+.png
