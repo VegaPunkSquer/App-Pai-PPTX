@@ -1,0 +1,8 @@
+{
+    "nome": "PPT",
+    "versao_atual": "v1.0.0",
+    "repo": "https://github.com/VegaPunkSquer/App-Pai-PPTX",
+    "builds": {
+        "desktop": "exe.bat"
+    }
+}
