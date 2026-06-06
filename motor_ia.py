@@ -5,11 +5,11 @@ import requests
 from google import genai
 from dotenv import load_dotenv
 
-# Lógica ninja para o PyInstaller achar o .env embutido no .exe
+# Carrega o .env embutido no .exe
 if getattr(sys, 'frozen', False):
     env_path = os.path.join(sys._MEIPASS, '.env')
 else:
-    env_path = '.env'
+    env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '.env'))
 
 load_dotenv(env_path)
 
@@ -19,22 +19,19 @@ PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 def gerar_roteiro_slides(tema):
     """Pede ao Gemini para estruturar a apresentação e retornar sucesso e os dados."""
     
-    # Trava de segurança para não congelar o PC caso a chave suma
     if not GEMINI_API_KEY:
-        return False, "ERRO CRÍTICO: A chave da API do Gemini não foi encontrada no .exe!"
+        return False, "ERRO: A chave da API Gemini não está configurada no seu arquivo .env!"
 
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     prompt = f"""
     Atue como um especialista em conteúdo educacional. 
     Crie uma estrutura de apresentação baseada no seguinte pedido: "{tema}".
-    (Se o usuário não especificar a quantidade de slides, faça 5 por padrão).
     Retorne APENAS um array JSON válido. 
-    O formato deve ser estritamente uma lista de dicionários com as chaves abaixo:
     [
         {{
             "titulo": "Título do slide",
-            "texto": "Um parágrafo de explicação direta e clara para ir no corpo do slide.",
+            "texto": "Um parágrafo de explicação.",
             "palavra_chave_imagem": "english keyword for pexels search"
         }}
     ]
@@ -47,26 +44,28 @@ def gerar_roteiro_slides(tema):
         )
         
         texto = response.text
-        # Garante que vai pegar só a lista JSON, mesmo que a IA mande texto antes ou depois
         inicio = texto.find('[')
         fim = texto.rfind(']') + 1
         
         if inicio != -1 and fim != 0:
-            texto_limpo = texto[inicio:fim]
-            return True, json.loads(texto_limpo)
+            return True, json.loads(texto[inicio:fim])
         else:
-            return False, f"A IA não retornou um formato válido.\nResposta bruta:\n{texto}"
+            return False, f"Formato inválido retornado pela IA. Resposta: {texto}"
             
     except Exception as e:
-        return False, f"Erro ao conectar com o Gemini:\n{str(e)}"
+        erro_str = str(e)
+        if "RESOURCE_EXHAUSTED" in erro_str:
+            return False, (
+                "Atenção: A cota desta chave foi atingida.\n\n"
+                "1. Verifique seu projeto no Google AI Studio/Cloud.\n"
+                "2. Confirme se a conta de faturamento está ativa no novo projeto.\n"
+                "3. Se o erro persistir, gere uma nova chave no projeto de produção."
+            )
+        return False, f"Erro inesperado na IA: {erro_str}"
 
 def baixar_imagem_pexels(palavra_chave, indice_slide):
-    """Busca 3 imagens relacionadas no Pexels e baixa temporariamente na pasta raiz."""
-    if not PEXELS_API_KEY or PEXELS_API_KEY == "SUA_CHAVE_PEXELS_AQUI":
-        print("Chave do Pexels não configurada.")
-        return []
+    if not PEXELS_API_KEY: return []
 
-    # Busca 3 fotos em formato paisagem
     url = f"https://api.pexels.com/v1/search?query={palavra_chave}&per_page=3&orientation=landscape"
     headers = {"Authorization": PEXELS_API_KEY}
     
@@ -78,14 +77,13 @@ def baixar_imagem_pexels(palavra_chave, indice_slide):
             if dados.get("photos"):
                 base_dir = os.path.dirname(os.path.abspath(__file__))
                 for j, photo in enumerate(dados["photos"]):
-                    url_imagem = photo["src"]["medium"] # Medium carrega mais rápido pra escolha
+                    url_imagem = photo["src"]["medium"]
                     img_data = requests.get(url_imagem).content
                     img_path = os.path.join(base_dir, f"temp_slide_{indice_slide}_opt_{j}.jpg")
-                    
                     with open(img_path, 'wb') as handler:
                         handler.write(img_data)
                     caminhos_imagens.append(img_path)
     except Exception as e:
-        print(f"Erro ao buscar/baixar imagem do Pexels: {e}")
+        print(f"Erro ao baixar imagem: {e}")
     
     return caminhos_imagens
