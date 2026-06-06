@@ -1,19 +1,28 @@
 import os
+import sys
 import json
 import requests
-from google import genai # <-- SAI o import velho, ENTRA o novo
+from google import genai
 from dotenv import load_dotenv
 
-load_dotenv()
+# Lógica ninja para o PyInstaller achar o .env embutido no .exe
+if getattr(sys, 'frozen', False):
+    env_path = os.path.join(sys._MEIPASS, '.env')
+else:
+    env_path = '.env'
+
+load_dotenv(env_path)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
-# A função velha configurar_gemini() SAIU. Não precisamos mais dela.
-
 def gerar_roteiro_slides(tema):
     """Pede ao Gemini para estruturar a apresentação e retornar sucesso e os dados."""
     
+    # Trava de segurança para não congelar o PC caso a chave suma
+    if not GEMINI_API_KEY:
+        return False, "ERRO CRÍTICO: A chave da API do Gemini não foi encontrada no .exe!"
+
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     prompt = f"""

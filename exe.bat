@@ -4,27 +4,27 @@ echo   Gerador de Executavel - App Pai Vega
 echo ==========================================
 echo.
 
-:: 1. Garante que o pyinstaller está instalado no ambiente do uv
 echo [1/3] Verificando/Instalando PyInstaller...
 uv pip install pyinstaller
 
 echo.
-:: 2. Roda o pyinstaller.
-:: --noconsole: esconde o terminal do windows
-:: --onefile: junta tudo num unico .exe
-:: --name: nome do arquivo final
 echo [2/3] Compilando o aplicativo (isso pode levar alguns minutos)...
-uv run pyinstaller --noconsole --onefile --name "App_Pai_Vega" main.py
+:: --noconsole: esconde o terminal
+:: --onefile: junta tudo num unico .exe
+:: --collect-all: Força a inclusao de bibliotecas dificeis de rastrear
+:: --add-data: Embuti o arquivo .env dentro do .exe compilado
+uv run pyinstaller --noconsole --onefile --name "App_Pai_Vega" --collect-all pptx --collect-all google --add-data ".env;." main.py
 
 echo.
 echo [3/3] Limpando arquivos temporarios...
-:: Remove a pasta build e o arquivo .spec que o pyinstaller cria (opcional, deixa a pasta mais limpa)
 rmdir /s /q build
 del /q App_Pai_Vega.spec
 
 echo.
 echo ==========================================
-echo SUCESSO! O seu executavel esta na pasta "dist".
-echo Pode pegar o App_Pai_Vega.exe la e mandar pro seu pai!
+echo SUCESSO ABSOLUTO! 
+echo O seu App_Pai_Vega.exe blindado e autonomo esta na pasta "dist".
+echo Pode enviar SOH ELE pro seu pai que agora vai voar!
 echo ==========================================
 pause
+```
