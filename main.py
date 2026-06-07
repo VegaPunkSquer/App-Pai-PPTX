@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import subprocess
+import traceback
 from PySide6.QtWidgets import (
     QApplication, QDialog, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QFileDialog, QColorDialog, QMessageBox,
@@ -16,14 +17,11 @@ from pptx.enum.dml import MSO_FILL
 from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 from pptx.util import Pt
 import motor_ia
-import traceback
 
-# --- CORREÇÃO DO CAMINHO DO CONFIG (Amnésia do PyInstaller) ---
+# --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
 if getattr(sys, 'frozen', False):
-    # Se for o .exe, salva na mesma pasta onde o .exe está rodando
     base_dir = os.path.dirname(sys.executable)
 else:
-    # Se for rodando no VS Code, salva na pasta do script
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
 CONFIG_FILE = os.path.join(base_dir, "config.json")
@@ -137,7 +135,7 @@ class ImageSelectionDialog(QDialog):
         self.selected_images[slide_idx] = caminho
         self.show_options_for_slide(row_idx)
 
-# --- JANELA DE CONFIGURAÇÕES (O CORAÇÃO COMERCIAL) ---
+# --- JANELA DE CONFIGURAÇÕES ---
 class ConfigDialog(QDialog):
     def __init__(self, current_config, parent=None):
         super().__init__(parent)
@@ -191,7 +189,6 @@ class ConfigDialog(QDialog):
         hbox_model.addWidget(self.combo_model)
         hbox_model.addWidget(self.btn_load_models)
         self.vbox_ia.addLayout(hbox_model)
-        
         self.vbox_ia.addStretch()
         
         # Aba 3: Aparência & Acessibilidade
@@ -217,7 +214,6 @@ class ConfigDialog(QDialog):
         vbox_vis.addLayout(hbox_zoom)
         vbox_vis.addStretch()
 
-        # Adiciona as abas
         self.tabs.addTab(self.tab_licenca, "Licença")
         self.tabs.addTab(self.tab_ia, "Inteligência Artificial")
         self.tabs.addTab(self.tab_visual, "Aparência")
@@ -231,7 +227,6 @@ class ConfigDialog(QDialog):
         self.update_ia_tab_visibility(self.combo_licenca.currentText())
 
     def update_ia_tab_visibility(self, licensa):
-        """Bloqueia ou libera campos dependendo do tipo de licença pago."""
         if licensa == "SAAS (Chave Embutida)":
             self.lbl_aviso_saas.show()
             self.container_byok.hide()
@@ -240,11 +235,10 @@ class ConfigDialog(QDialog):
             self.lbl_aviso_saas.hide()
             self.container_byok.show()
             self.tabs.setTabEnabled(1, True)
-        else: # FREE
-            self.tabs.setTabEnabled(1, False) # Trava a aba de IA
+        else:
+            self.tabs.setTabEnabled(1, False) 
 
     def load_dynamic_models(self):
-        """Busca os modelos reais disponíveis na chave configurada."""
         licensa = self.combo_licenca.currentText()
         chave = self.txt_api_key.text().strip() if licensa == "BYOK (Sua Chave)" else None
         
@@ -256,7 +250,6 @@ class ConfigDialog(QDialog):
             self.combo_model.clear()
             self.combo_model.addItems(modelos)
             
-            # Tenta manter o modelo que já estava selecionado se ele existir na lista nova
             modelo_salvo = self.config.get("model", "gemini-2.5-flash")
             if modelo_salvo in modelos:
                 self.combo_model.setCurrentText(modelo_salvo)
@@ -281,6 +274,7 @@ class AppPaiVega(QMainWindow):
         self.resize(500, 500)
         
         self.config = self.load_config()
+        self.last_dir = self.config.get("last_dir", "") # GUARDA A ÚLTIMA PASTA
         self.pptx_path = None
         self.bg_path = None
         self.text_color = None
@@ -299,6 +293,7 @@ class AppPaiVega(QMainWindow):
         return {"license": "FREE", "api_key": "", "model": "gemini-2.5-flash", "theme": "Escuro", "zoom": 100}
 
     def save_config(self):
+        self.config["last_dir"] = self.last_dir
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(self.config, f, indent=4)
 
@@ -309,7 +304,7 @@ class AppPaiVega(QMainWindow):
             self.save_config()
             self.apply_theme()
             self.apply_zoom(self.config["zoom"])
-            self.update_main_ui_lock() # Atualiza os cadeados imediatamente ao fechar a config
+            self.update_main_ui_lock()
 
     def apply_theme(self):
         tema = self.config.get("theme", "Escuro")
@@ -331,7 +326,6 @@ class AppPaiVega(QMainWindow):
             palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
             palette.setColor(QPalette.HighlightedText, Qt.black)
         else:
-            # Força o Tema Claro na marra (Ignora o Dark Mode do Sistema Operacional)
             palette.setColor(QPalette.Window, QColor(240, 240, 240))
             palette.setColor(QPalette.WindowText, Qt.black)
             palette.setColor(QPalette.Base, Qt.white)
@@ -366,7 +360,6 @@ class AppPaiVega(QMainWindow):
         self.main_layout = QVBoxLayout(self.main_container)
         self.main_layout.setSpacing(15)
 
-        # Botão de Configurações no Topo
         hbox_top = QHBoxLayout()
         hbox_top.addStretch()
         self.btn_config = QPushButton("⚙️ Configurações / Licença")
@@ -375,7 +368,6 @@ class AppPaiVega(QMainWindow):
         hbox_top.addWidget(self.btn_config)
         self.main_layout.addLayout(hbox_top)
 
-        # 1. Carregar PPTX
         self.btn_load = QPushButton("1. Carregar Apresentação Pronta (.pptx)")
         self.btn_load.clicked.connect(self.load_pptx)
         self.lbl_pptx = QLabel("Nenhum arquivo selecionado")
@@ -384,7 +376,6 @@ class AppPaiVega(QMainWindow):
         self.main_layout.addWidget(self.btn_load)
         self.main_layout.addWidget(self.lbl_pptx)
 
-        # BLOCO DA IA 
         hbox_ia = QHBoxLayout()
         self.txt_tema = QTextEdit()
         self.txt_tema.setPlaceholderText("Ou digite o tema para a IA criar do zero...")
@@ -399,7 +390,6 @@ class AppPaiVega(QMainWindow):
         hbox_ia.addWidget(self.btn_gerar_ia)
         self.main_layout.addLayout(hbox_ia)
 
-        # 2. Cor do Texto
         hbox_text = QHBoxLayout()
         self.btn_text_color = QPushButton("2. Escolher Cor de Todo o Texto (Opcional)")
         self.btn_text_color.clicked.connect(self.choose_text_color)
@@ -410,7 +400,6 @@ class AppPaiVega(QMainWindow):
         hbox_text.addStretch()
         self.main_layout.addLayout(hbox_text)
 
-        # 3. Cor de Preenchimento
         hbox_fill = QHBoxLayout()
         self.btn_fill_color = QPushButton("3. Escolher Cor de Fundo dos Cards (Opcional)")
         self.btn_fill_color.clicked.connect(self.choose_fill_color)
@@ -421,7 +410,6 @@ class AppPaiVega(QMainWindow):
         hbox_fill.addStretch()
         self.main_layout.addLayout(hbox_fill)
 
-        # 4. Plano de Fundo
         hbox_bg = QHBoxLayout()
         self.btn_bg = QPushButton("4. Fundo do Slide (Opcional)")
         self.btn_bg.clicked.connect(self.load_bg)
@@ -435,7 +423,6 @@ class AppPaiVega(QMainWindow):
         hbox_bg.addStretch()
         self.main_layout.addLayout(hbox_bg)
 
-        # 5. Reduzir Imagens
         hbox_scale = QHBoxLayout()
         self.chk_scale = QCheckBox("5. Reduzir imagens em (%):")
         self.spin_scale = QSpinBox()
@@ -449,7 +436,7 @@ class AppPaiVega(QMainWindow):
         hbox_scale.addStretch()
         self.main_layout.addLayout(hbox_scale)
 
-        # 5.1. Aumentar Textos (Acessibilidade)
+        # 5.1. Aumentar Textos
         hbox_text_scale = QHBoxLayout()
         self.chk_text_scale = QCheckBox("5.1. Aumentar textos (Título e Corpo) em (%):")
         self.spin_text_scale = QSpinBox()
@@ -480,7 +467,6 @@ class AppPaiVega(QMainWindow):
         hbox_text_scale.addStretch()
         self.main_layout.addLayout(hbox_text_scale)
 
-        # 6. Salvar
         self.btn_save = QPushButton("6. Processar Apresentação e Salvar")
         self.btn_save.setMinimumHeight(45)
         self.btn_save.setStyleSheet("background-color: #333; color: white; font-weight: bold; font-size: 14px;")
@@ -488,31 +474,29 @@ class AppPaiVega(QMainWindow):
         self.main_layout.addWidget(self.btn_save)
 
         self.setCentralWidget(self.main_container)
-        self.update_main_ui_lock() # <--- ISSO AQUI FAZ O BLOQUEIO ACONTECER LOGO QUE O APP ABRE
+        self.update_main_ui_lock() 
 
     def update_main_ui_lock(self):
-        """Bloqueia visualmente e funcionalmente a área da IA se a licença for FREE"""
         if self.config.get("license", "FREE") == "FREE":
-            # Bloqueio agressivo no campo de texto
             self.txt_tema.setReadOnly(True)
             self.txt_tema.setPlaceholderText("🔒 Geração Inteligente bloqueada (Licença FREE).")
             self.txt_tema.setStyleSheet("background-color: #444; color: #888; border: 1px solid #333;")
             
-            # Bloqueio do botão
             self.btn_gerar_ia.setEnabled(False)
             self.btn_gerar_ia.setStyleSheet("background-color: #555; color: #888; font-weight: bold; padding: 10px;")
         else:
-            # Libera tudo para SAAS / BYOK
             self.txt_tema.setReadOnly(False)
             self.txt_tema.setPlaceholderText("Ou digite o tema para a IA criar do zero...")
-            self.txt_tema.setStyleSheet("") # Limpa a CSS para voltar ao normal do Tema
+            self.txt_tema.setStyleSheet("") 
             
             self.btn_gerar_ia.setEnabled(True)
             self.btn_gerar_ia.setStyleSheet("background-color: #2b5c8f; color: white; font-weight: bold; padding: 10px;")
 
     def load_pptx(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Selecionar PPTX", "", "PowerPoint (*.pptx)")
+        path, _ = QFileDialog.getOpenFileName(self, "Selecionar PPTX", self.last_dir, "PowerPoint (*.pptx)")
         if path:
+            self.last_dir = os.path.dirname(path)
+            self.save_config()
             self.pptx_path = path
             self.lbl_pptx.setText(os.path.basename(path))
 
@@ -529,15 +513,16 @@ class AppPaiVega(QMainWindow):
             self.lbl_fill_color_indicator.setStyleSheet(f"background-color: {color.name()}; border: 1px solid gray; border-radius: 12px;")
 
     def load_bg(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Selecionar Imagem de Fundo", "", "Imagens (*.png *.jpg *.jpeg)")
+        path, _ = QFileDialog.getOpenFileName(self, "Selecionar Imagem de Fundo", self.last_dir, "Imagens (*.png *.jpg *.jpeg)")
         if path:
+            self.last_dir = os.path.dirname(path)
+            self.save_config()
             self.bg_path = path
             pixmap = QPixmap(path)
             self.lbl_bg_preview.setPixmap(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             self.lbl_bg_preview.setStyleSheet("border: 1px solid gray;") 
 
     def gerar_com_ia(self):
-        # Validação da Licença
         licensa = self.config.get("license", "FREE")
         if licensa == "FREE":
             QMessageBox.warning(self, "Recurso Premium", "A geração por IA é um recurso Premium. Atualize para o plano BYOK ou SaaS nas Configurações.")
@@ -548,13 +533,11 @@ class AppPaiVega(QMainWindow):
             QMessageBox.warning(self, "Aviso", "Por favor, introduza o tema primeiro!")
             return
         
-        # --- O CÃO DE GUARDA (Check Salva-Vidas) ---
         api_key_usuario = self.config.get("api_key") if licensa == "BYOK (Sua Chave)" else None
         sucesso_check, msg_check = motor_ia.testar_conectividade(api_key_usuario)
         if not sucesso_check:
             QMessageBox.critical(self, "Bloqueio na IA", f"Conexão recusada:\n\n{msg_check}")
             return
-        # -------------------------------------------
         
         progress = QProgressDialog("Conectando com a IA (Gemini)...", "Cancelar", 0, 100, self)
         progress.setWindowTitle("Gerando Apresentação")
@@ -564,11 +547,9 @@ class AppPaiVega(QMainWindow):
         progress.show()
         QApplication.processEvents()
         
-        # Injeta a chave dependendo da licença
         api_key_usuario = self.config.get("api_key") if licensa == "BYOK (Sua Chave)" else None
         modelo = self.config.get("model", "gemini-2.5-flash")
 
-        # --- BLOCO DE SEGURANÇA QUE EVITA O TRAVAMENTO DOS 5% ---
         try:
             sucesso, roteiro_ou_erro = motor_ia.gerar_roteiro_slides(tema, api_key_usuario, modelo)
             if progress.wasCanceled(): return
@@ -615,7 +596,6 @@ class AppPaiVega(QMainWindow):
                     except: pass
                     return
 
-            # Renderização do PPTX
             prs = Presentation()
             prs.slide_width = 12192000
             prs.slide_height = 6858000
@@ -683,7 +663,6 @@ class AppPaiVega(QMainWindow):
             except: pass
 
         except Exception as e:
-            # Se explodir, fecha a barra fantasma e escreve o relatório do óbito!
             progress.close()
             erro_msg = traceback.format_exc()
             log_path = os.path.join(base_dir, "erro_ia_log.txt")
@@ -691,16 +670,19 @@ class AppPaiVega(QMainWindow):
             with open(log_path, "w", encoding="utf-8") as f:
                 f.write(f"ERRO CRÍTICO NA IA:\n{erro_msg}")
             
-            QMessageBox.critical(self, "Falha Fatal", f"O aplicativo encontrou um erro e gerou um arquivo de log.\n\nSalvo em:\n{log_path}\n\nErro: {str(e)}")
+            QMessageBox.critical(self, "Falha Fatal", f"O aplicativo encontrou um erro e gerou um log.\n\nSalvo em:\n{log_path}\n\nErro: {str(e)}")
 
     def process_and_save(self):
         if not self.pptx_path:
             QMessageBox.warning(self, "Aviso", "Por favor, carregue uma apresentação primeiro.")
             return
 
-        default_save_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apresentacao_final.pptx")
+        default_save_path = os.path.join(self.last_dir if self.last_dir else base_dir, "apresentacao_final.pptx")
         save_path, _ = QFileDialog.getSaveFileName(self, "Salvar Apresentação Final", default_save_path, "PowerPoint (*.pptx)")
         if not save_path: return
+        
+        self.last_dir = os.path.dirname(save_path)
+        self.save_config()
 
         try:
             prs = Presentation(self.pptx_path)
@@ -724,23 +706,48 @@ class AppPaiVega(QMainWindow):
                     if shape.has_text_frame:
                         for paragraph in shape.text_frame.paragraphs:
                             for run in paragraph.runs:
-                                # Troca a cor se foi pedido
                                 if txt_rgb:
                                     run.font.color.rgb = txt_rgb
                                 
-                                # Aumenta a fonte do pai do Vega
-                                if self.chk_text_scale.isChecked() and run.font.size is not None:
+                                if self.chk_text_scale.isChecked():
                                     percentual = self.spin_text_scale.value()
-                                    novo_tamanho_pt = run.font.size.pt * (1.0 + (percentual / 100.0))
-                                    run.font.size = Pt(int(novo_tamanho_pt))
+                                    fator = 1.0 + (percentual / 100.0)
+                                    tamanho = run.font.size if run.font.size is not None else paragraph.font.size
+                                    if tamanho is None:
+                                        tamanho = Pt(18)
+                                    
+                                    run.font.size = Pt(int(tamanho.pt * fator))
 
                 if self.bg_path:
                     pic = slide.shapes.add_picture(self.bg_path, 0, 0, prs.slide_width, prs.slide_height)
                     slide.shapes._spTree.remove(pic._element)
                     slide.shapes._spTree.insert(2, pic._element)
 
-            prs.save(save_path)
-            QMessageBox.information(self, "Sucesso", "Filtros aplicados e apresentação salva com sucesso!")
+            salvo_com_sucesso = False
+            while not salvo_com_sucesso:
+                try:
+                    prs.save(save_path)
+                    salvo_com_sucesso = True
+                except PermissionError:
+                    resp = QMessageBox.warning(
+                        self, 
+                        "Arquivo Aberto e Bloqueado", 
+                        "O arquivo PowerPoint destino já está aberto e travado.\n\n"
+                        "Deseja que o aplicativo feche o PowerPoint forçadamente para continuar a edição?", 
+                        QMessageBox.Ok | QMessageBox.Cancel
+                    )
+                    if resp == QMessageBox.Ok:
+                        if os.name == 'nt':
+                            os.system("taskkill /f /im POWERPNT.EXE")
+                            import time; time.sleep(1.5)
+                    else:
+                        return 
+                        
+            try:
+                if os.name == 'nt': os.startfile(save_path)
+                else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', save_path])
+            except: pass
+
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Erro ao processar arquivo:\n{str(e)}")
 
