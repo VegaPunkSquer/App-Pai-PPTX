@@ -16,13 +16,18 @@ load_dotenv(env_path)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
-def gerar_roteiro_slides(tema):
-    """Pede ao Gemini para estruturar a apresentação e retornar sucesso e os dados."""
+def gerar_roteiro_slides(tema, api_key_usuario=None, modelo_selecionado='gemini-2.5-flash'):
+    """Gera o roteiro usando a chave do SaaS ou a chave BYOK do cliente."""
     
-    if not GEMINI_API_KEY:
-        return False, "ERRO: A chave da API Gemini não está configurada no seu arquivo .env!"
+    chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY
+    
+    if not chave_final:
+        return False, "ERRO: Chave de API não configurada. Ative sua licença ou insira sua chave (BYOK)."
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    try:
+        client = genai.Client(api_key=chave_final)
+    except Exception as e:
+        return False, f"Erro ao inicializar o cliente do Gemini:\n{str(e)}"
     
     prompt = f"""
     Atue como um especialista em conteúdo educacional. 
@@ -39,7 +44,7 @@ def gerar_roteiro_slides(tema):
     
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model=modelo_selecionado,
             contents=prompt
         )
         
