@@ -89,19 +89,33 @@ def baixar_imagem_pexels(palavra_chave, indice_slide):
     
     return caminhos_imagens
 
-def testar_conectividade():
-    """Checa se a chave do Gemini está viva e com saldo ANTES de rodar a barra de progresso."""
-    if not GEMINI_API_KEY:
-        return False, "Chave da API Gemini não encontrada no arquivo .env!"
+def listar_modelos(api_key_usuario=None):
+    """Busca dinamicamente quais modelos de geração de texto esta chave tem acesso."""
+    chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY # <-- Corrigido aqui
+    if not chave_final: return ["gemini-2.5-flash"]
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        # Pede apenas as informações do modelo (gasta 0 tokens e valida a cota/chave instantaneamente)
+        client = genai.Client(api_key=chave_final)
+        # Filtra apenas os modelos que fazem geração de conteúdo (ignora modelos de áudio puro, embeddings, etc)
+        modelos = [m.name.replace('models/', '') for m in client.models.list() if 'generateContent' in m.supported_generation_methods]
+        return modelos if modelos else ["gemini-2.5-flash"]
+    except Exception:
+        # Se a chave estiver bloqueada (429), devolvemos um fallback
+        return ["gemini-2.5-flash", "gemini-2.5-pro"]
+
+def testar_conectividade(api_key_usuario=None):
+    """Checa se a chave do Gemini está viva e com saldo ANTES de rodar a barra."""
+    chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY # <-- Corrigido aqui
+    if not chave_final:
+        return False, "Chave da API Gemini não configurada!"
+    try:
+        client = genai.Client(api_key=chave_final)
+        # Pede apenas as informações do modelo (gasta 0 tokens e valida a cota na hora)
         client.models.get(model='gemini-2.5-flash')
         return True, "OK"
     except Exception as e:
         erro_str = str(e)
         if "RESOURCE_EXHAUSTED" in erro_str:
-            return False, "O saldo desta chave se esgotou ou a cota foi bloqueada (Erro 429). Verifique o Google Cloud!"
+            return False, "O saldo desta chave se esgotou ou foi bloqueada (Erro 429)."
         elif "API_KEY" in erro_str.upper() or "400" in erro_str:
             return False, "Chave de API inválida ou incorreta."
-        return False, f"Falha na conexão com a IA: {erro_str}"
+        return False, f"Falha na conexão: {erro_str}"

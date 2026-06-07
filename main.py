@@ -403,6 +403,7 @@ class AppPaiVega(QMainWindow):
         self.main_layout.addWidget(self.btn_save)
 
         self.setCentralWidget(self.main_container)
+        self.update_main_ui_lock() # <--- ISSO AQUI FAZ O BLOQUEIO ACONTECER LOGO QUE O APP ABRE
 
     def load_pptx(self):
         path, _ = QFileDialog.getOpenFileName(self, "Selecionar PPTX", "", "PowerPoint (*.pptx)")
@@ -431,15 +432,22 @@ class AppPaiVega(QMainWindow):
             self.lbl_bg_preview.setStyleSheet("border: 1px solid gray;") 
 
     def gerar_com_ia(self):
+        # Validação da Licença
+        licensa = self.config.get("license", "FREE")
+        if licensa == "FREE":
+            QMessageBox.warning(self, "Recurso Premium", "A geração por IA é um recurso Premium. Atualize para o plano BYOK ou SaaS nas Configurações.")
+            return
+
         tema = self.txt_tema.toPlainText().strip()
         if not tema:
             QMessageBox.warning(self, "Aviso", "Por favor, introduza o tema primeiro!")
             return
         
         # --- O CÃO DE GUARDA (Check Salva-Vidas) ---
-        sucesso_check, msg_check = motor_ia.testar_conectividade()
+        api_key_usuario = self.config.get("api_key") if licensa == "BYOK (Sua Chave)" else None
+        sucesso_check, msg_check = motor_ia.testar_conectividade(api_key_usuario)
         if not sucesso_check:
-            QMessageBox.critical(self, "Bloqueio na IA", f"O Google recusou a conexão:\n\n{msg_check}")
+            QMessageBox.critical(self, "Bloqueio na IA", f"Conexão recusada:\n\n{msg_check}")
             return
         # -------------------------------------------
         
@@ -452,8 +460,7 @@ class AppPaiVega(QMainWindow):
         QApplication.processEvents()
         
         # Injeta a chave dependendo da licença
-        licenca = self.config.get("license", "FREE")
-        api_key_usuario = self.config.get("api_key") if licenca == "BYOK (Sua Chave)" else None
+        api_key_usuario = self.config.get("api_key") if licensa == "BYOK (Sua Chave)" else None
         modelo = self.config.get("model", "gemini-2.5-flash")
 
         sucesso, roteiro_ou_erro = motor_ia.gerar_roteiro_slides(tema, api_key_usuario, modelo)
@@ -593,10 +600,8 @@ class AppPaiVega(QMainWindow):
 
                     if hasattr(shape, "fill") and fill_rgb:
                         try:
-                            if shape.fill.type == MSO_FILL.SOLID:
-                                shape.fill.fore_color.rgb = fill_rgb
-                        except AttributeError:
-                            pass
+                            if shape.fill.type == MSO_FILL.SOLID: shape.fill.fore_color.rgb = fill_rgb
+                        except: pass
                     
                     if shape.has_text_frame:
                         for paragraph in shape.text_frame.paragraphs:
@@ -605,7 +610,7 @@ class AppPaiVega(QMainWindow):
                                 if txt_rgb:
                                     run.font.color.rgb = txt_rgb
                                 
-                                # Aumenta a fonte (se foi pedido e se a fonte já tiver um tamanho)
+                                # Aumenta a fonte do pai do Vega
                                 if self.chk_text_scale.isChecked() and run.font.size is not None:
                                     percentual = self.spin_text_scale.value()
                                     novo_tamanho_pt = run.font.size.pt * (1.0 + (percentual / 100.0))
