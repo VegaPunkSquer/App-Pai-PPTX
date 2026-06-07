@@ -270,6 +270,7 @@ class AppPaiVega(QMainWindow):
             self.save_config()
             self.apply_theme()
             self.apply_zoom(self.config["zoom"])
+            self.update_main_ui_lock() # Atualiza os cadeados imediatamente ao fechar a config
 
     def apply_theme(self):
         tema = self.config.get("theme", "Escuro")
@@ -291,7 +292,21 @@ class AppPaiVega(QMainWindow):
             palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
             palette.setColor(QPalette.HighlightedText, Qt.black)
         else:
-            palette = app.style().standardPalette() # Tema claro padrão
+            # Força o Tema Claro na marra (Ignora o Dark Mode do Sistema Operacional)
+            palette.setColor(QPalette.Window, QColor(240, 240, 240))
+            palette.setColor(QPalette.WindowText, Qt.black)
+            palette.setColor(QPalette.Base, Qt.white)
+            palette.setColor(QPalette.AlternateBase, QColor(225, 225, 225))
+            palette.setColor(QPalette.ToolTipBase, Qt.white)
+            palette.setColor(QPalette.ToolTipText, Qt.black)
+            palette.setColor(QPalette.Text, Qt.black)
+            palette.setColor(QPalette.Button, QColor(240, 240, 240))
+            palette.setColor(QPalette.ButtonText, Qt.black)
+            palette.setColor(QPalette.BrightText, Qt.red)
+            palette.setColor(QPalette.Link, QColor(42, 130, 218))
+            palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.HighlightedText, Qt.white)
+            
         app.setPalette(palette)
 
     def apply_zoom(self, val):
@@ -404,6 +419,26 @@ class AppPaiVega(QMainWindow):
 
         self.setCentralWidget(self.main_container)
         self.update_main_ui_lock() # <--- ISSO AQUI FAZ O BLOQUEIO ACONTECER LOGO QUE O APP ABRE
+
+    def update_main_ui_lock(self):
+        """Bloqueia visualmente e funcionalmente a área da IA se a licença for FREE"""
+        if self.config.get("license", "FREE") == "FREE":
+            # Bloqueio agressivo no campo de texto
+            self.txt_tema.setReadOnly(True)
+            self.txt_tema.setPlaceholderText("🔒 Geração Inteligente bloqueada (Licença FREE).")
+            self.txt_tema.setStyleSheet("background-color: #444; color: #888; border: 1px solid #333;")
+            
+            # Bloqueio do botão
+            self.btn_gerar_ia.setEnabled(False)
+            self.btn_gerar_ia.setStyleSheet("background-color: #555; color: #888; font-weight: bold; padding: 10px;")
+        else:
+            # Libera tudo para SAAS / BYOK
+            self.txt_tema.setReadOnly(False)
+            self.txt_tema.setPlaceholderText("Ou digite o tema para a IA criar do zero...")
+            self.txt_tema.setStyleSheet("") # Limpa a CSS para voltar ao normal do Tema
+            
+            self.btn_gerar_ia.setEnabled(True)
+            self.btn_gerar_ia.setStyleSheet("background-color: #2b5c8f; color: white; font-weight: bold; padding: 10px;")
 
     def load_pptx(self):
         path, _ = QFileDialog.getOpenFileName(self, "Selecionar PPTX", "", "PowerPoint (*.pptx)")
