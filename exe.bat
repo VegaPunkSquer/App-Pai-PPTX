@@ -13,7 +13,7 @@ echo [2/3] Compilando o aplicativo (isso pode levar alguns minutos)...
 :: --onefile: junta tudo num unico .exe
 :: --collect-all: Força a inclusao de bibliotecas dificeis de rastrear
 :: --add-data: Embuti o arquivo .env dentro do .exe compilado
-uv run pyinstaller --noconsole --onefile --name "App_Pai_Vega" --collect-all pptx --collect-all google --add-data ".env;." main.py
+uv run pyinstaller --clean --noconsole --onefile --name "App_Pai_Vega" --collect-all pptx --collect-all google --add-data ".env;." main.py
 
 echo.
 echo [3/3] Limpando arquivos temporarios...

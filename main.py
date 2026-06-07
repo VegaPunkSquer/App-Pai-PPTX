@@ -17,7 +17,15 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 from pptx.util import Pt
 import motor_ia
 
-CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
+# --- CORREÇÃO DO CAMINHO DO CONFIG (Amnésia do PyInstaller) ---
+if getattr(sys, 'frozen', False):
+    # Se for o .exe, salva na mesma pasta onde o .exe está rodando
+    base_dir = os.path.dirname(sys.executable)
+else:
+    # Se for rodando no VS Code, salva na pasta do script
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+CONFIG_FILE = os.path.join(base_dir, "config.json")
 
 # --- JANELA DE ESCOLHA DE IMAGENS ---
 class ImageSelectionDialog(QDialog):
