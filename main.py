@@ -16,6 +16,7 @@ from pptx.enum.dml import MSO_FILL
 from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 from pptx.util import Pt
 import motor_ia
+import traceback
 
 # --- CORREÇÃO DO CAMINHO DO CONFIG (Amnésia do PyInstaller) ---
 if getattr(sys, 'frozen', False):
@@ -567,117 +568,130 @@ class AppPaiVega(QMainWindow):
         api_key_usuario = self.config.get("api_key") if licensa == "BYOK (Sua Chave)" else None
         modelo = self.config.get("model", "gemini-2.5-flash")
 
-        sucesso, roteiro_ou_erro = motor_ia.gerar_roteiro_slides(tema, api_key_usuario, modelo)
-        if progress.wasCanceled(): return
-        
-        if not sucesso:
-            progress.close()
-            QMessageBox.critical(self, "Erro Detalhado na IA", f"Falha ao gerar:\n\n{roteiro_ou_erro}")
-            return
-            
-        roteiro = roteiro_ou_erro
-        total_slides = len(roteiro)
-        progress.setValue(20)
-        progress.setLabelText("Estrutura pronta! Buscando imagens...")
-        QApplication.processEvents()
-
-        slide_images_dict = {}
-        for i, slide_data in enumerate(roteiro):
+        # --- BLOCO DE SEGURANÇA QUE EVITA O TRAVAMENTO DOS 5% ---
+        try:
+            sucesso, roteiro_ou_erro = motor_ia.gerar_roteiro_slides(tema, api_key_usuario, modelo)
             if progress.wasCanceled(): return
-            palavra_chave = slide_data.get("palavra_chave_imagem", "")
-            if palavra_chave:
-                progress.setLabelText(f"Baixando opções para o slide {i + 1} de {total_slides}...")
-                QApplication.processEvents()
-                paths = motor_ia.baixar_imagem_pexels(palavra_chave, i)
-                if paths:
-                    slide_images_dict[i] = paths
             
-            progress.setValue(20 + int(((i + 1) / total_slides) * 65))
-
-        progress.setValue(90)
-        progress.setLabelText("Abrindo painel de escolhas...")
-        QApplication.processEvents()
-        progress.close()
-
-        selected_images = {}
-        if slide_images_dict:
-            dialog = ImageSelectionDialog(slide_images_dict, roteiro, self)
-            if dialog.exec() == QDialog.Accepted:
-                selected_images = dialog.selected_images
-            else:
-                try:
-                    for caminhos in slide_images_dict.values():
-                        for c in caminhos:
-                            if os.path.exists(c): os.remove(c)
-                except: pass
+            if not sucesso:
+                progress.close()
+                QMessageBox.critical(self, "Erro Detalhado na IA", f"Falha ao gerar:\n\n{roteiro_ou_erro}")
                 return
+                
+            roteiro = roteiro_ou_erro
+            total_slides = len(roteiro)
+            progress.setValue(20)
+            progress.setLabelText("Estrutura pronta! Buscando imagens...")
+            QApplication.processEvents()
 
-        # Renderização do PPTX
-        prs = Presentation()
-        prs.slide_width = 12192000
-        prs.slide_height = 6858000
+            slide_images_dict = {}
+            for i, slide_data in enumerate(roteiro):
+                if progress.wasCanceled(): return
+                palavra_chave = slide_data.get("palavra_chave_imagem", "")
+                if palavra_chave:
+                    progress.setLabelText(f"Baixando opções para o slide {i + 1} de {total_slides}...")
+                    QApplication.processEvents()
+                    paths = motor_ia.baixar_imagem_pexels(palavra_chave, i)
+                    if paths:
+                        slide_images_dict[i] = paths
+                
+                progress.setValue(20 + int(((i + 1) / total_slides) * 65))
 
-        for i, slide_data in enumerate(roteiro):
-            slide = prs.slides.add_slide(prs.slide_layouts[6]) 
+            progress.setValue(90)
+            progress.setLabelText("Abrindo painel de escolhas...")
+            QApplication.processEvents()
+            progress.close()
+
+            selected_images = {}
+            if slide_images_dict:
+                dialog = ImageSelectionDialog(slide_images_dict, roteiro, self)
+                if dialog.exec() == QDialog.Accepted:
+                    selected_images = dialog.selected_images
+                else:
+                    try:
+                        for caminhos in slide_images_dict.values():
+                            for c in caminhos:
+                                if os.path.exists(c): os.remove(c)
+                    except: pass
+                    return
+
+            # Renderização do PPTX
+            prs = Presentation()
+            prs.slide_width = 12192000
+            prs.slide_height = 6858000
+
+            for i, slide_data in enumerate(roteiro):
+                slide = prs.slides.add_slide(prs.slide_layouts[6]) 
+                
+                barra_lateral = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, int(prs.slide_width * 0.02), prs.slide_height)
+                barra_lateral.fill.solid()
+                barra_lateral.fill.fore_color.rgb = RGBColor(43, 92, 143) 
+                barra_lateral.line.fill.background() 
+
+                title_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), int(prs.slide_height * 0.08), int(prs.slide_width * 0.45), int(prs.slide_height * 0.2))
+                tf_title = title_box.text_frame
+                tf_title.word_wrap = True
+                p_title = tf_title.paragraphs[0]
+                p_title.text = slide_data.get("titulo", "").upper()
+                p_title.font.bold = True
+                p_title.font.size = Pt(28)
+                p_title.font.color.rgb = RGBColor(30, 60, 90)
+
+                body_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), int(prs.slide_height * 0.3), int(prs.slide_width * 0.45), int(prs.slide_height * 0.6))
+                tf_body = body_box.text_frame
+                tf_body.word_wrap = True
+
+                frases = [f.strip() + "." for f in slide_data.get("texto", "").split(".") if len(f.strip()) > 5]
+                for idx, frase in enumerate(frases):
+                    p_body = tf_body.paragraphs[0] if idx == 0 else tf_body.add_paragraph()
+                    p_body.text = frase
+                    p_body.font.size = Pt(16)
+                    p_body.level = 0
+                    p_body.space_after = Pt(14) 
+
+                if i in selected_images:
+                    try:
+                        img_left = int(prs.slide_width * 0.54)
+                        img_top = int(prs.slide_height * 0.1)
+                        img_max_w = int(prs.slide_width * 0.42)
+                        img_max_h = int(prs.slide_height * 0.8)
+
+                        pic = slide.shapes.add_picture(selected_images[i], img_left, img_top)
+                        ratio = min(img_max_w / pic.width, img_max_h / pic.height)
+
+                        pic.width = int(pic.width * ratio)
+                        pic.height = int(pic.height * ratio)
+                        pic.left = img_left + int((img_max_w - pic.width) / 2)
+                        pic.top = img_top + int((img_max_h - pic.height) / 2)
+                    except: pass
+
+            temp_path = os.path.join(base_dir, "apresentacao_ia_temp.pptx")
+            prs.save(temp_path)
             
-            barra_lateral = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, int(prs.slide_width * 0.02), prs.slide_height)
-            barra_lateral.fill.solid()
-            barra_lateral.fill.fore_color.rgb = RGBColor(43, 92, 143) 
-            barra_lateral.line.fill.background() 
+            try:
+                for caminhos in slide_images_dict.values():
+                    for c in caminhos:
+                        if os.path.exists(c): os.remove(c)
+            except: pass
 
-            title_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), int(prs.slide_height * 0.08), int(prs.slide_width * 0.45), int(prs.slide_height * 0.2))
-            tf_title = title_box.text_frame
-            tf_title.word_wrap = True
-            p_title = tf_title.paragraphs[0]
-            p_title.text = slide_data.get("titulo", "").upper()
-            p_title.font.bold = True
-            p_title.font.size = Pt(28)
-            p_title.font.color.rgb = RGBColor(30, 60, 90)
+            self.pptx_path = temp_path
+            self.lbl_pptx.setText("✨ Apresentação carregada e pronta para edição final!")
+            
+            try:
+                if os.name == 'nt': os.startfile(temp_path)
+                else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', temp_path])
+            except: pass
 
-            body_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), int(prs.slide_height * 0.3), int(prs.slide_width * 0.45), int(prs.slide_height * 0.6))
-            tf_body = body_box.text_frame
-            tf_body.word_wrap = True
-
-            frases = [f.strip() + "." for f in slide_data.get("texto", "").split(".") if len(f.strip()) > 5]
-            for idx, frase in enumerate(frases):
-                p_body = tf_body.paragraphs[0] if idx == 0 else tf_body.add_paragraph()
-                p_body.text = frase
-                p_body.font.size = Pt(16)
-                p_body.level = 0
-                p_body.space_after = Pt(14) 
-
-            if i in selected_images:
-                try:
-                    img_left = int(prs.slide_width * 0.54)
-                    img_top = int(prs.slide_height * 0.1)
-                    img_max_w = int(prs.slide_width * 0.42)
-                    img_max_h = int(prs.slide_height * 0.8)
-
-                    pic = slide.shapes.add_picture(selected_images[i], img_left, img_top)
-                    ratio = min(img_max_w / pic.width, img_max_h / pic.height)
-
-                    pic.width = int(pic.width * ratio)
-                    pic.height = int(pic.height * ratio)
-                    pic.left = img_left + int((img_max_w - pic.width) / 2)
-                    pic.top = img_top + int((img_max_h - pic.height) / 2)
-                except: pass
-
-        temp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apresentacao_ia_temp.pptx")
-        prs.save(temp_path)
-        
-        try:
-            for caminhos in slide_images_dict.values():
-                for c in caminhos:
-                    if os.path.exists(c): os.remove(c)
-        except: pass
-
-        self.pptx_path = temp_path
-        self.lbl_pptx.setText("✨ Apresentação carregada e pronta para edição final!")
-        
-        try:
-            if os.name == 'nt': os.startfile(temp_path)
-            else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', temp_path])
-        except: pass
+        except Exception as e:
+            # Se explodir, fecha a barra fantasma e escreve o relatório do óbito!
+            progress.close()
+            erro_msg = traceback.format_exc()
+            log_path = os.path.join(base_dir, "erro_ia_log.txt")
+            
+            with open(log_path, "w", encoding="utf-8") as f:
+                f.write(f"ERRO CRÍTICO NA IA:\n{erro_msg}")
+            
+            QMessageBox.critical(self, "Falha Fatal", f"O aplicativo encontrou um erro e gerou um arquivo de log.\n\nSalvo em:\n{log_path}\n\nErro: {str(e)}")
 
     def process_and_save(self):
         if not self.pptx_path:
