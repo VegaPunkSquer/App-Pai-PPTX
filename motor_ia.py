@@ -80,6 +80,7 @@ def baixar_imagem_pexels(palavra_chave, indice_slide):
                     url_imagem = photo["src"]["medium"]
                     img_data = requests.get(url_imagem).content
                     img_path = os.path.join(base_dir, f"temp_slide_{indice_slide}_opt_{j}.jpg")
+                    
                     with open(img_path, 'wb') as handler:
                         handler.write(img_data)
                     caminhos_imagens.append(img_path)
@@ -87,3 +88,20 @@ def baixar_imagem_pexels(palavra_chave, indice_slide):
         print(f"Erro ao baixar imagem: {e}")
     
     return caminhos_imagens
+
+def testar_conectividade():
+    """Checa se a chave do Gemini está viva e com saldo ANTES de rodar a barra de progresso."""
+    if not GEMINI_API_KEY:
+        return False, "Chave da API Gemini não encontrada no arquivo .env!"
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        # Pede apenas as informações do modelo (gasta 0 tokens e valida a cota/chave instantaneamente)
+        client.models.get(model='gemini-2.5-flash')
+        return True, "OK"
+    except Exception as e:
+        erro_str = str(e)
+        if "RESOURCE_EXHAUSTED" in erro_str:
+            return False, "O saldo desta chave se esgotou ou a cota foi bloqueada (Erro 429). Verifique o Google Cloud!"
+        elif "API_KEY" in erro_str.upper() or "400" in erro_str:
+            return False, "Chave de API inválida ou incorreta."
+        return False, f"Falha na conexão com a IA: {erro_str}"
