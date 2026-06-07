@@ -170,11 +170,19 @@ class ConfigDialog(QDialog):
         vbox_byok.addWidget(self.txt_api_key)
         self.vbox_ia.addWidget(self.container_byok)
         
-        self.vbox_ia.addWidget(QLabel("Modelo de Inteligência Artificial:"))
+        # --- MODELOS DINÂMICOS ---
+        hbox_model = QHBoxLayout()
         self.combo_model = QComboBox()
-        self.combo_model.addItems(["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.0-fast", "gemini-3.0-think"])
-        self.combo_model.setCurrentText(self.config.get("model", "gemini-2.5-flash"))
-        self.vbox_ia.addWidget(self.combo_model)
+        self.combo_model.addItem(self.config.get("model", "gemini-2.5-flash"))
+        
+        self.btn_load_models = QPushButton("🔄 Carregar Modelos")
+        self.btn_load_models.clicked.connect(self.load_dynamic_models)
+        
+        hbox_model.addWidget(QLabel("Modelo de Inteligência Artificial:"))
+        hbox_model.addWidget(self.combo_model)
+        hbox_model.addWidget(self.btn_load_models)
+        self.vbox_ia.addLayout(hbox_model)
+        
         self.vbox_ia.addStretch()
         
         # Aba 3: Aparência & Acessibilidade
@@ -225,6 +233,28 @@ class ConfigDialog(QDialog):
             self.tabs.setTabEnabled(1, True)
         else: # FREE
             self.tabs.setTabEnabled(1, False) # Trava a aba de IA
+
+    def load_dynamic_models(self):
+        """Busca os modelos reais disponíveis na chave configurada."""
+        licensa = self.combo_licenca.currentText()
+        chave = self.txt_api_key.text().strip() if licensa == "BYOK (Sua Chave)" else None
+        
+        self.btn_load_models.setText("⏳ Carregando...")
+        QApplication.processEvents()
+        
+        try:
+            modelos = motor_ia.listar_modelos(chave)
+            self.combo_model.clear()
+            self.combo_model.addItems(modelos)
+            
+            # Tenta manter o modelo que já estava selecionado se ele existir na lista nova
+            modelo_salvo = self.config.get("model", "gemini-2.5-flash")
+            if modelo_salvo in modelos:
+                self.combo_model.setCurrentText(modelo_salvo)
+        except Exception as e:
+            QMessageBox.warning(self, "Erro", f"Não foi possível carregar os modelos: {str(e)}")
+            
+        self.btn_load_models.setText("🔄 Carregar Modelos")
 
     def save_and_close(self):
         self.config["license"] = self.combo_licenca.currentText()
@@ -409,6 +439,37 @@ class AppPaiVega(QMainWindow):
         hbox_scale.addWidget(self.spin_scale)
         hbox_scale.addStretch()
         self.main_layout.addLayout(hbox_scale)
+
+        # 5.1. Aumentar Textos (Acessibilidade)
+        hbox_text_scale = QHBoxLayout()
+        self.chk_text_scale = QCheckBox("5.1. Aumentar textos (Título e Corpo) em (%):")
+        self.spin_text_scale = QSpinBox()
+        self.spin_text_scale.setRange(1, 150)
+        self.spin_text_scale.setValue(20)
+        self.spin_text_scale.setEnabled(False) 
+        
+        self.lbl_text_preview = QLabel("Aa Exemplo")
+        self.lbl_text_preview.setStyleSheet("color: gray; font-size: 14px;")
+        self.lbl_text_preview.setVisible(False)
+
+        def update_text_preview():
+            if self.chk_text_scale.isChecked():
+                self.lbl_text_preview.setVisible(True)
+                base_px = 14
+                new_px = int(base_px * (1 + (self.spin_text_scale.value() / 100.0)))
+                self.lbl_text_preview.setStyleSheet(f"color: #28a745; font-size: {new_px}px; font-weight: bold;")
+            else:
+                self.lbl_text_preview.setVisible(False)
+
+        self.chk_text_scale.toggled.connect(self.spin_text_scale.setEnabled)
+        self.chk_text_scale.toggled.connect(update_text_preview)
+        self.spin_text_scale.valueChanged.connect(update_text_preview)
+
+        hbox_text_scale.addWidget(self.chk_text_scale)
+        hbox_text_scale.addWidget(self.spin_text_scale)
+        hbox_text_scale.addWidget(self.lbl_text_preview)
+        hbox_text_scale.addStretch()
+        self.main_layout.addLayout(hbox_text_scale)
 
         # 6. Salvar
         self.btn_save = QPushButton("6. Processar Apresentação e Salvar")
