@@ -16,7 +16,7 @@ load_dotenv(env_path)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
 
-def gerar_roteiro_slides(tema, api_key_usuario=None, modelo_selecionado='gemini-2.5-flash'):
+def gerar_roteiro_slides(assunto_apresentacao, api_key_usuario=None, modelo_selecionado='gemini-2.5-flash'):
     """Gera o roteiro usando a chave do SaaS ou a chave BYOK do cliente."""
     
     chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY
@@ -31,7 +31,7 @@ def gerar_roteiro_slides(tema, api_key_usuario=None, modelo_selecionado='gemini-
     
     prompt = f"""
     Atue como um especialista em conteúdo educacional. 
-    Crie uma estrutura de apresentação baseada no seguinte pedido: "{tema}".
+    Crie uma estrutura de apresentação baseada no seguinte pedido: "{assunto_apresentacao}".
     Retorne APENAS um array JSON válido. 
     [
         {{
