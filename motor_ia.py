@@ -91,15 +91,15 @@ def baixar_imagem_pexels(palavra_chave, indice_slide):
 
 def listar_modelos(api_key_usuario=None):
     """Busca dinamicamente quais modelos de geração de texto esta chave tem acesso."""
-    chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY # <-- Corrigido aqui
+    chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY
     if not chave_final: return ["gemini-2.5-flash"]
     try:
         client = genai.Client(api_key=chave_final)
-        # Filtra apenas os modelos que fazem geração de conteúdo (ignora modelos de áudio puro, embeddings, etc)
+        # Filtra apenas os modelos que fazem geração de conteúdo
         modelos = [m.name.replace('models/', '') for m in client.models.list() if 'generateContent' in m.supported_generation_methods]
         return modelos if modelos else ["gemini-2.5-flash"]
     except Exception:
-        # Se a chave estiver bloqueada (429), devolvemos um fallback
+        # Fallback de segurança se a chave estiver bloqueada
         return ["gemini-2.5-flash", "gemini-2.5-pro"]
 
 def testar_conectividade(api_key_usuario=None):
