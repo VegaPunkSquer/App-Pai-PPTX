@@ -24,7 +24,5 @@ echo.
 echo ==========================================
 echo SUCESSO ABSOLUTO! 
 echo O seu App_Pai_Vega.exe blindado e autonomo esta na pasta "dist".
-echo Pode enviar SOH ELE pro seu pai que agora vai voar!
+echo Pode enviar SÓ ELE pro seu pai que agora vai voar!
 echo ==========================================
-pause
-```
