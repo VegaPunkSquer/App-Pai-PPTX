@@ -4,14 +4,13 @@ import os
 import json
 import subprocess
 import traceback
-import comtypes.client
 from PySide6.QtWidgets import (
     QApplication, QDialog, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QFileDialog, QColorDialog, QMessageBox,
     QCheckBox, QSpinBox, QTextEdit, QScrollArea, QListWidget, QSlider, QProgressDialog,
     QTabWidget, QComboBox, QLineEdit
 )
-from PySide6.QtGui import QColor, QPixmap, QFont, QPalette
+from PySide6.QtGui import QColor, QPixmap, QFont, QPalette, QIcon
 from PySide6.QtCore import Qt, QSize
 from pptx import Presentation
 from pptx.dml.color import RGBColor
@@ -19,6 +18,8 @@ from pptx.enum.dml import MSO_FILL
 from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 from pptx.util import Pt
 import motor_ia
+import ctypes
+import comtypes.client
 
 # --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
 if getattr(sys, 'frozen', False):
@@ -275,9 +276,19 @@ class AppPaiVega(QMainWindow):
         self.setWindowTitle("SmartSlides Pro")
         self.resize(500, 500)
         
+        # --- ÍCONE DA JANELA E BARRA DE TAREFAS ---
+        icon_path = os.path.join(base_dir, "assets", "SmartSlides.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+            # Macete do CTYPES: Força o Windows a respeitar o seu ícone
+            if os.name == 'nt':
+                myappid = 'vega.smartslides.pro.1.0'
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+        
         self.config = self.load_config()
         self.last_dir = self.config.get("last_dir", "") # GUARDA A ÚLTIMA PASTA
         self.pptx_path = None
+        self.last_saved_pptx = None # Guarda o último editado para o conversor de PDF
         self.bg_path = None
         self.text_color = None
         self.fill_color = None
@@ -474,6 +485,13 @@ class AppPaiVega(QMainWindow):
         self.btn_save.setStyleSheet("background-color: #333; color: white; font-weight: bold; font-size: 14px;")
         self.btn_save.clicked.connect(self.process_and_save)
         self.main_layout.addWidget(self.btn_save)
+
+        # --- 7. BOTAO CONVERTER PARA PDF ---
+        self.btn_pdf = QPushButton("7. Converter o PPTX atual para PDF")
+        self.btn_pdf.setMinimumHeight(35)
+        self.btn_pdf.setStyleSheet("background-color: #a8201a; color: white; font-weight: bold;")
+        self.btn_pdf.clicked.connect(self.export_to_pdf)
+        self.main_layout.addWidget(self.btn_pdf)
 
         self.setCentralWidget(self.main_container)
         self.update_main_ui_lock() 
@@ -744,10 +762,9 @@ class AppPaiVega(QMainWindow):
                             import time; time.sleep(1.5)
                     else:
                         return 
-            
-            # GUARDA NA MEMÓRIA QUAL FOI O ÚLTIMO ARQUIVO PROCESSADO PARA O PDF PUXAR
+                        
+            # --- AUTO OPEN (Abre automaticamente o PPTX após edição) ---
             self.last_saved_pptx = save_path
-            
             try:
                 if os.name == 'nt': os.startfile(save_path)
                 else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', save_path])
@@ -761,7 +778,7 @@ class AppPaiVega(QMainWindow):
         alvo = self.last_saved_pptx if self.last_saved_pptx else self.pptx_path
         
         if not alvo or not os.path.exists(alvo):
-            QMessageBox.warning(self, "Aviso", "Você precisa carregar ou salvar uma apresentação primeiro.")
+            QMessageBox.warning(self, "Aviso", "Por favor, carregue ou salve uma apresentação primeiro.")
             return
             
         pdf_path, _ = QFileDialog.getSaveFileName(self, "Salvar PDF", alvo.replace(".pptx", ".pdf"), "PDF (*.pdf)")
@@ -774,9 +791,8 @@ class AppPaiVega(QMainWindow):
         QApplication.processEvents()
         
         try:
-            # 32 é o número mágico (enum) do formato PDF no COM do Office
+            # 32 é o código do formato PDF no PowerPoint
             powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
-            # Usa caminhos absolutos pois a API do Windows COM é enjoada com caminhos relativos
             deck = powerpoint.Presentations.Open(os.path.abspath(alvo))
             deck.SaveAs(os.path.abspath(pdf_path), 32)
             deck.Close()
