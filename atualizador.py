@@ -10,10 +10,21 @@ PRODUTO_ID_NO_MASTER = 1
 NOME_EXECUTAVEL_ATUAL = "SmartSlides Pro.exe"
 API_MASTER_URL = "https://vegap-masterapp.hf.space"
 
+import json
+
+# Caminho absoluto dinâmico que funciona tanto no VS Code quanto dentro do .exe compactado
+if getattr(sys, 'frozen', False):
+    diretorio_raiz = sys._MEIPASS  # Pasta temporária do PyInstaller
+else:
+    diretorio_raiz = os.path.dirname(os.path.abspath(__file__))
+
+caminho_manifesto = os.path.join(diretorio_raiz, "vega_manifesto.json")
+
 try:
-    from versao import VERSAO_LOCAL
-except ImportError:
-    VERSAO_LOCAL = "{self.input_versao.text().strip()}"
+    with open(caminho_manifesto, "r", encoding="utf-8") as f:
+        VERSAO_LOCAL = json.load(f).get("versao_atual", "v1.0.0")
+except Exception:
+    VERSAO_LOCAL = "v1.0.0"
 
 def checar_e_atualizar(parent_widget=None):
     if not getattr(sys, 'frozen', False):
