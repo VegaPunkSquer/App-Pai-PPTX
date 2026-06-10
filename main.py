@@ -17,6 +17,7 @@ from pptx.enum.dml import MSO_FILL
 from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 from pptx.util import Pt
 import motor_ia
+from atualizador import checar_e_atualizar
 
 # --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
 if getattr(sys, 'frozen', False):
