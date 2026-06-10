@@ -23,9 +23,11 @@ import comtypes.client
 
 # --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
 if getattr(sys, 'frozen', False):
-    base_dir = os.path.dirname(sys.executable)
+    base_dir = os.path.dirname(sys.executable) # Onde o .exe está (para configs e saves)
+    bundle_dir = sys._MEIPASS # Onde o PyInstaller extrai os assets embutidos
 else:
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    bundle_dir = base_dir
 
 CONFIG_FILE = os.path.join(base_dir, "config.json")
 
@@ -277,7 +279,7 @@ class AppPaiVega(QMainWindow):
         self.resize(500, 500)
         
         # --- ÍCONE DA JANELA E BARRA DE TAREFAS ---
-        icon_path = os.path.join(base_dir, "assets", "SmartSlides.ico")
+        icon_path = os.path.join(bundle_dir, "assets", "SmartSlides.ico") # <-- CORRIGIDO PARA BUNDLE_DIR
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
             # Macete do CTYPES: Força o Windows a respeitar o seu ícone
