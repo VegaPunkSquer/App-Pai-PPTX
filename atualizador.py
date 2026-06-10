@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt
 
 # Variáveis injetadas automaticamente pela Nave-Mãe
 PRODUTO_ID_NO_MASTER = 1
-NOME_EXECUTAVEL_ATUAL = "SmarSlides.exe"
+NOME_EXECUTAVEL_ATUAL = "SmartSlides Pro.exe"
 API_MASTER_URL = "https://vegap-masterapp.hf.space"
 
 try:

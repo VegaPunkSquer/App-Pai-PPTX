@@ -1,8 +1,10 @@
+from atualizador import checar_e_atualizar
 import sys
 import os
 import json
 import subprocess
 import traceback
+import comtypes.client
 from PySide6.QtWidgets import (
     QApplication, QDialog, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QFileDialog, QColorDialog, QMessageBox,
@@ -17,7 +19,6 @@ from pptx.enum.dml import MSO_FILL
 from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 from pptx.util import Pt
 import motor_ia
-from atualizador import checar_e_atualizar
 
 # --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
 if getattr(sys, 'frozen', False):
@@ -733,7 +734,7 @@ class AppPaiVega(QMainWindow):
                     resp = QMessageBox.warning(
                         self, 
                         "Arquivo Aberto e Bloqueado", 
-                        "O arquivo PowerPoint está aberto e travado.\n\n"
+                        "O arquivo PowerPoint destino já está aberto e travado.\n\n"
                         "Deseja que o aplicativo feche o PowerPoint forçadamente para continuar a edição?", 
                         QMessageBox.Ok | QMessageBox.Cancel
                     )
@@ -743,7 +744,10 @@ class AppPaiVega(QMainWindow):
                             import time; time.sleep(1.5)
                     else:
                         return 
-                        
+            
+            # GUARDA NA MEMÓRIA QUAL FOI O ÚLTIMO ARQUIVO PROCESSADO PARA O PDF PUXAR
+            self.last_saved_pptx = save_path
+            
             try:
                 if os.name == 'nt': os.startfile(save_path)
                 else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', save_path])
@@ -751,6 +755,40 @@ class AppPaiVega(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Erro ao processar arquivo:\n{str(e)}")
+
+    def export_to_pdf(self):
+        # Tenta pegar o último que o usuário editou/salvou. Se não tiver, pega o que ele carregou no passo 1.
+        alvo = self.last_saved_pptx if self.last_saved_pptx else self.pptx_path
+        
+        if not alvo or not os.path.exists(alvo):
+            QMessageBox.warning(self, "Aviso", "Você precisa carregar ou salvar uma apresentação primeiro.")
+            return
+            
+        pdf_path, _ = QFileDialog.getSaveFileName(self, "Salvar PDF", alvo.replace(".pptx", ".pdf"), "PDF (*.pdf)")
+        if not pdf_path: return
+        
+        progress = QProgressDialog("Convertendo para PDF via PowerPoint (Aguarde...)", "Cancelar", 0, 0, self)
+        progress.setWindowTitle("Gerando PDF")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.show()
+        QApplication.processEvents()
+        
+        try:
+            # 32 é o número mágico (enum) do formato PDF no COM do Office
+            powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
+            # Usa caminhos absolutos pois a API do Windows COM é enjoada com caminhos relativos
+            deck = powerpoint.Presentations.Open(os.path.abspath(alvo))
+            deck.SaveAs(os.path.abspath(pdf_path), 32)
+            deck.Close()
+            powerpoint.Quit()
+            
+            progress.close()
+            QMessageBox.information(self, "Sucesso", "Apresentação convertida para PDF com sucesso!")
+            
+            if os.name == 'nt': os.startfile(pdf_path)
+        except Exception as e:
+            progress.close()
+            QMessageBox.critical(self, "Erro no PDF", f"Falha ao converter.\nVerifique se o PowerPoint não está com janelas de diálogo travando o fundo.\n\nDetalhes:\n{str(e)}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

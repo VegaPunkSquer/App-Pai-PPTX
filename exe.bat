@@ -13,7 +13,7 @@ echo [2/3] Compilando o aplicativo (isso pode levar alguns minutos)...
 :: --onefile: junta tudo num unico .exe
 :: --collect-all: Força a inclusao de bibliotecas dificeis de rastrear
 :: --add-data: Embuti o arquivo .env dentro do .exe compilado
-uv run pyinstaller --clean --noconsole --onefile --name "SmartSlides Pro" --collect-all pptx --collect-all google --add-data ".env;." main.py
+uv run pyinstaller --clean --noconsole --onefile --name "SmartSlides Pro" --icon "assets/SmartSlides.ico" --collect-all pptx --collect-all google --add-data ".env;." --add-data "assets;assets" main.py
 
 echo.
 echo [3/3] Limpando arquivos temporarios...
@@ -24,5 +24,5 @@ echo.
 echo ==========================================
 echo SUCESSO ABSOLUTO! 
 echo O seu SmartSlides Pro.exe blindado e autonomo esta na pasta "dist".
-echo Pode enviar SÓ ELE pro seu pai que agora vai voar!
+echo Pode enviar SOH ELE pro seu pai que agora vai voar!
 echo ==========================================
