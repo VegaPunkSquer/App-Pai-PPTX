@@ -786,7 +786,7 @@ class AppPaiVega(QMainWindow):
         pdf_path, _ = QFileDialog.getSaveFileName(self, "Salvar PDF", alvo.replace(".pptx", ".pdf"), "PDF (*.pdf)")
         if not pdf_path: return
         
-        progress = QProgressDialog("Convertendo para PDF via PowerPoint (Aguarde...)", "Cancelar", 0, 0, self)
+        progress = QProgressDialog("Convertendo para PDF (Aguarde...)", "Cancelar", 0, 0, self)
         progress.setWindowTitle("Gerando PDF")
         progress.setWindowModality(Qt.WindowModal)
         progress.show()
@@ -810,6 +810,13 @@ class AppPaiVega(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    
+    # 1. GIRA A CHAVE DO RADAR ANTES DE ABRIR O APP
+    if checar_e_atualizar():
+        # Se achou atualização e o usuário aceitou, o app morre aqui para substituir o arquivo
+        os._exit(0)
+        
+    # 2. Se não tem atualização, abre a janela normalmente
     window = AppPaiVega()
     window.show()
     sys.exit(app.exec())
