@@ -4,13 +4,12 @@ import requests
 import subprocess
 from PySide6.QtWidgets import QMessageBox, QProgressDialog
 from PySide6.QtCore import Qt
+import json
 
-# Variáveis injetadas automaticamente pela Nave-Mãe
+# Variáveis
 PRODUTO_ID_NO_MASTER = 1
 NOME_EXECUTAVEL_ATUAL = "SmartSlides Pro.exe"
 API_MASTER_URL = "https://vegap-masterapp.hf.space"
-
-import json
 
 # Caminho absoluto dinâmico que funciona tanto no VS Code quanto dentro do .exe compactado
 if getattr(sys, 'frozen', False):
@@ -31,7 +30,8 @@ def checar_e_atualizar(parent_widget=None):
         return False
 
     try:
-        resp = requests.get(f"{{API_MASTER_URL}}/atualizacao/{{PRODUTO_ID_NO_MASTER}}", timeout=5)
+        # AS CHAVES FORAM CORRIGIDAS AQUI
+        resp = requests.get(f"{API_MASTER_URL}/atualizacao/{PRODUTO_ID_NO_MASTER}", timeout=5)
         if resp.status_code == 200:
             dados = resp.json()
             versao_nuvem = dados.get("versao_atual")
@@ -41,7 +41,8 @@ def checar_e_atualizar(parent_widget=None):
                 msg = QMessageBox(parent_widget)
                 msg.setIcon(QMessageBox.Information)
                 msg.setWindowTitle("Atualização de Estabilidade")
-                msg.setText(f"Uma nova versão ({{versao_nuvem}}) está disponível!")
+                # AS CHAVES FORAM CORRIGIDAS AQUI
+                msg.setText(f"Uma nova versão ({versao_nuvem}) está disponível!")
                 msg.setInformativeText("O sistema baixará a atualização e reiniciará automaticamente. Deseja prosseguir?")
                 msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 msg.setDefaultButton(QMessageBox.Yes)
@@ -50,7 +51,7 @@ def checar_e_atualizar(parent_widget=None):
                     _baixar_e_instalar(link_download, parent_widget)
                     return True
     except Exception as e:
-        print(f"Aviso silencioso: Falha ao checar atualização - {{e}}")
+        print(f"Aviso silencioso: Falha ao checar atualização - {e}")
         pass
     return False
 
@@ -84,7 +85,8 @@ def _baixar_e_instalar(url, parent_widget):
                 if tamanho_total > 0:
                     progresso.setValue(int((tamanho_baixado / tamanho_total) * 100))
 
-        conteudo_bat = f"""@echo off\\ntimeout /t 2 /nobreak > NUL\\ndel /F /Q "{{exe_atual}}"\\nren "{{exe_novo}}" "{{NOME_EXECUTAVEL_ATUAL}}"\\nexplorer.exe "{{os.path.join(diretorio_base, NOME_EXECUTAVEL_ATUAL)}}"\\ndel "%~f0"\\n"""
+        # AS CHAVES FORAM CORRIGIDAS AQUI
+        conteudo_bat = f"""@echo off\ntimeout /t 2 /nobreak > NUL\ndel /F /Q "{exe_atual}"\nren "{exe_novo}" "{NOME_EXECUTAVEL_ATUAL}"\nexplorer.exe "{os.path.join(diretorio_base, NOME_EXECUTAVEL_ATUAL)}"\ndel "%~f0"\n"""
         with open(bat_path, "w", encoding="utf-8") as f:
             f.write(conteudo_bat)
 
@@ -96,4 +98,4 @@ def _baixar_e_instalar(url, parent_widget):
     except Exception as e:
         progresso.cancel()
         if os.path.exists(exe_novo): os.remove(exe_novo)
-        QMessageBox.critical(parent_widget, "Erro", f"Falha ao baixar a atualização.\\n{{e}}")
+        QMessageBox.critical(parent_widget, "Erro", f"Falha ao baixar a atualização.\n{e}")
