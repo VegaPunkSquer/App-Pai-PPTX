@@ -2,7 +2,7 @@ import sys
 import os
 import requests
 import subprocess
-from PySide6.QtWidgets import QMessageBox, QProgressDialog
+from PySide6.QtWidgets import QMessageBox, QProgressDialog, QApplication
 from PySide6.QtCore import Qt
 import json
 
@@ -31,7 +31,7 @@ def checar_e_atualizar(parent_widget=None):
 
     try:
         # AS CHAVES FORAM CORRIGIDAS AQUI
-        resp = requests.get(f"{API_MASTER_URL}/atualizacao/{PRODUTO_ID_NO_MASTER}", timeout=5)
+        resp = requests.get(f"{API_MASTER_URL}/master/atualizacao/{PRODUTO_ID_NO_MASTER}", timeout=5)
         if resp.status_code == 200:
             dados = resp.json()
             versao_nuvem = dados.get("versao_atual")
@@ -65,7 +65,9 @@ def _baixar_e_instalar(url, parent_widget):
     progresso.setWindowTitle("Atualizando")
     progresso.setWindowModality(Qt.WindowModal)
     progresso.setAutoClose(True)
+    progresso.setMinimumDuration(0) # <--- MATA O DELAY DE 4 SEGUNDOS! APARECE NA HORA!
     progresso.show()
+    QApplication.processEvents() # Força a tela a desenhar a barra agora!
 
     try:
         resposta = requests.get(url, stream=True, timeout=15)
@@ -75,6 +77,7 @@ def _baixar_e_instalar(url, parent_widget):
 
         with open(exe_novo, 'wb') as arquivo:
             for chunk in resposta.iter_content(chunk_size=8192):
+                QApplication.processEvents() # Mantém a interface viva pra barra andar!
                 if progresso.wasCanceled():
                     arquivo.close()
                     if os.path.exists(exe_novo): os.remove(exe_novo)
@@ -85,14 +88,24 @@ def _baixar_e_instalar(url, parent_widget):
                 if tamanho_total > 0:
                     progresso.setValue(int((tamanho_baixado / tamanho_total) * 100))
 
-        # AS CHAVES FORAM CORRIGIDAS AQUI
-        conteudo_bat = f"""@echo off\ntimeout /t 2 /nobreak > NUL\ndel /F /Q "{exe_atual}"\nren "{exe_novo}" "{NOME_EXECUTAVEL_ATUAL}"\nexplorer.exe "{os.path.join(diretorio_base, NOME_EXECUTAVEL_ATUAL)}"\ndel "%~f0"\n"""
-        with open(bat_path, "w", encoding="utf-8") as f:
+        # Pega o nome real do arquivo (útil caso você tenha renomeado ele na Área de Trabalho)
+        nome_exe_original = os.path.basename(exe_atual)
+        
+        conteudo_bat = f"""@echo off
+timeout /t 2 /nobreak > NUL
+del /F /Q "{exe_atual}"
+ren "{exe_novo}" "{nome_exe_original}"
+explorer.exe "{exe_atual}"
+del "%~f0"
+"""
+        # 'mbcs' força o Python a escrever os acentos no formato burro que o CMD do Windows entende
+        with open(bat_path, "w", encoding="mbcs") as f:
             f.write(conteudo_bat)
 
         CREATE_NO_WINDOW = 0x08000000
         DETACHED_PROCESS = 0x00000008
         subprocess.Popen([bat_path], creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS)
+
         os._exit(0)
 
     except Exception as e:

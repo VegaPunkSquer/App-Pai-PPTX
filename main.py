@@ -755,7 +755,7 @@ class AppPaiVega(QMainWindow):
                         self, 
                         "Arquivo Aberto e Bloqueado", 
                         "O arquivo PowerPoint destino já está aberto e travado.\n\n"
-                        "Deseja que o aplicativo feche o PowerPoint forçadamente para continuar a edição?", 
+                        "Deseja que o aplicativo feche o PowerPoint para continuar a edição?", 
                         QMessageBox.Ok | QMessageBox.Cancel
                     )
                     if resp == QMessageBox.Ok:
