@@ -1,3 +1,5 @@
+import requests
+
 from atualizador import checar_e_atualizar
 import sys
 import os
@@ -11,7 +13,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QComboBox, QLineEdit
 )
 from PySide6.QtGui import QColor, QPixmap, QFont, QPalette, QIcon
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import QThread, Qt, QSize, Signal
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.dml import MSO_FILL
@@ -139,6 +141,132 @@ class ImageSelectionDialog(QDialog):
     def select_image(self, slide_idx, caminho, row_idx):
         self.selected_images[slide_idx] = caminho
         self.show_options_for_slide(row_idx)
+        
+class WorkerAuthApp(QThread):
+    sucesso = Signal(str)
+    erro = Signal(str)
+
+    def __init__(self, modo, payload):
+        super().__init__()
+        self.modo = modo # 'login' ou 'registrar'
+        self.payload = payload
+
+    def run(self):
+        url = "https://vegap-masterapp.hf.space"
+        endpoint = f"{url}/auth/app/{self.modo}"
+        try:
+            resp = requests.post(endpoint, json=self.payload, timeout=10)
+            if resp.status_code in [200, 201]:
+                dados = resp.json()
+                self.sucesso.emit(dados.get("access_token", ""))
+            else:
+                self.erro.emit(f"Erro: {resp.json().get('detail', resp.text)}")
+        except Exception as e:
+            self.erro.emit(f"Falha de conexão com o Master: {str(e)}")
+
+class LoginCadastroDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Conta VegaTech")
+        self.setFixedSize(350, 400)
+        self.token_recebido = None
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        self.tabs = QTabWidget()
+        
+        # ABA LOGIN
+        self.tab_login = QWidget()
+        layout_login = QVBoxLayout(self.tab_login)
+        self.inp_login_email = QLineEdit()
+        self.inp_login_email.setPlaceholderText("E-mail")
+        self.inp_login_senha = QLineEdit()
+        self.inp_login_senha.setPlaceholderText("Senha")
+        self.inp_login_senha.setEchoMode(QLineEdit.Password)
+        self.btn_logar = QPushButton("Entrar")
+        self.btn_logar.setStyleSheet("background-color: #0078d7; color: white; padding: 10px; font-weight: bold;")
+        self.btn_logar.clicked.connect(self.fazer_login)
+        
+        layout_login.addWidget(QLabel("Já tem uma conta? Acesse:"))
+        layout_login.addWidget(self.inp_login_email)
+        layout_login.addWidget(self.inp_login_senha)
+        layout_login.addWidget(self.btn_logar)
+        layout_login.addStretch()
+        
+        # ABA CADASTRO
+        self.tab_cadastro = QWidget()
+        layout_cad = QVBoxLayout(self.tab_cadastro)
+        self.inp_cad_nome = QLineEdit()
+        self.inp_cad_nome.setPlaceholderText("Nome Completo")
+        self.inp_cad_email = QLineEdit()
+        self.inp_cad_email.setPlaceholderText("E-mail")
+        self.inp_cad_doc = QLineEdit()
+        self.inp_cad_doc.setPlaceholderText("CPF ou CNPJ (Apenas números)")
+        self.inp_cad_senha = QLineEdit()
+        self.inp_cad_senha.setPlaceholderText("Crie uma Senha")
+        self.inp_cad_senha.setEchoMode(QLineEdit.Password)
+        self.btn_cadastrar = QPushButton("Criar Conta")
+        self.btn_cadastrar.setStyleSheet("background-color: #28a745; color: white; padding: 10px; font-weight: bold;")
+        self.btn_cadastrar.clicked.connect(self.fazer_cadastro)
+        
+        layout_cad.addWidget(QLabel("Novo por aqui? Cadastre-se:"))
+        layout_cad.addWidget(self.inp_cad_nome)
+        layout_cad.addWidget(self.inp_cad_email)
+        layout_cad.addWidget(self.inp_cad_doc)
+        layout_cad.addWidget(self.inp_cad_senha)
+        layout_cad.addWidget(self.btn_cadastrar)
+        layout_cad.addStretch()
+        
+        self.tabs.addTab(self.tab_login, "Login")
+        self.tabs.addTab(self.tab_cadastro, "Criar Conta")
+        layout.addWidget(self.tabs)
+
+    def fazer_login(self):
+        email = self.inp_login_email.text().strip()
+        senha = self.inp_login_senha.text()
+        if not email or not senha:
+            QMessageBox.warning(self, "Aviso", "Preencha e-mail e senha.")
+            return
+        self.btn_logar.setEnabled(False)
+        self.btn_logar.setText("Autenticando...")
+        
+        payload = {"email": email, "senha": senha}
+        self.worker = WorkerAuthApp('login', payload)
+        self.worker.sucesso.connect(self.auth_sucesso)
+        self.worker.erro.connect(self.auth_erro)
+        self.worker.start()
+
+    def fazer_cadastro(self):
+        nome = self.inp_cad_nome.text().strip()
+        email = self.inp_cad_email.text().strip()
+        doc = "".join(filter(str.isdigit, self.inp_cad_doc.text()))
+        senha = self.inp_cad_senha.text()
+        
+        if not nome or not email or not doc or not senha:
+            QMessageBox.warning(self, "Aviso", "Preencha todos os campos.")
+            return
+            
+        self.btn_cadastrar.setEnabled(False)
+        self.btn_cadastrar.setText("Registrando...")
+        
+        payload = {"nome": nome, "email": email, "documento": doc, "senha": senha, "produto": "SmartSlides Pro"}
+        self.worker = WorkerAuthApp('registrar', payload)
+        self.worker.sucesso.connect(self.auth_sucesso)
+        self.worker.erro.connect(self.auth_erro)
+        self.worker.start()
+
+    def auth_sucesso(self, token):
+        self.token_recebido = token
+        QMessageBox.information(self, "Sucesso", "Conta conectada com sucesso!")
+        self.accept()
+
+    def auth_erro(self, msg):
+        self.btn_logar.setEnabled(True)
+        self.btn_logar.setText("Entrar")
+        self.btn_cadastrar.setEnabled(True)
+        self.btn_cadastrar.setText("Criar Conta")
+        QMessageBox.critical(self, "Aviso", msg)
 
 # --- JANELA DE CONFIGURAÇÕES ---
 class ConfigDialog(QDialog):
@@ -264,7 +392,32 @@ class ConfigDialog(QDialog):
         self.btn_load_models.setText("🔄 Carregar Modelos")
 
     def save_and_close(self):
-        self.config["license"] = self.combo_licenca.currentText()
+        licenca_escolhida = self.combo_licenca.currentText()
+        
+        # 1. Barreira do BYOK (O Aviso Salva-Vidas)
+        if licenca_escolhida == "BYOK (Sua Chave)":
+            resp = QMessageBox.question(
+                self, 
+                "Aviso Importante - Plano BYOK", 
+                "O plano BYOK (Bring Your Own Key) exige que você tenha sua própria chave de desenvolvedor da API do Google Gemini.\n\n"
+                "Se você não é desenvolvedor ou não sabe do que se trata, recomendamos adquirir o plano SAAS para evitar dores de cabeça.\n\n"
+                "Tem certeza que deseja prosseguir com o BYOK?", 
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if resp == QMessageBox.No:
+                return # Aborta o salvamento, deixa ele na tela para trocar
+                
+        # 2. Barreira do SAAS (Autenticação Obrigatória)
+        if licenca_escolhida == "SAAS (Chave Embutida)":
+            if not self.config.get("token_master"):
+                dialog_auth = LoginCadastroDialog(self)
+                if dialog_auth.exec() == QDialog.Accepted:
+                    self.config["token_master"] = dialog_auth.token_recebido
+                else:
+                    return # Ele fechou a janela sem logar, então aborta o salvamento
+
+        # Se passou pelas barreiras, salva tudo
+        self.config["license"] = licenca_escolhida
         self.config["api_key"] = self.txt_api_key.text().strip()
         self.config["model"] = self.combo_model.currentText()
         self.config["theme"] = self.combo_theme.currentText()
