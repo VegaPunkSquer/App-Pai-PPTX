@@ -394,13 +394,16 @@ class LojaDialog(QDialog):
             trial_dias = int(detalhes.get("trial_dias", 0))
             ciclo = detalhes.get("ciclo", "unico").capitalize()
             
+            # MÁGICA VISUAL: Corta o "_MENSAL" do nome para o cliente ler só "SAAS"
+            nome_exibicao = nome_plano.split("_")[0] if "_" in nome_plano else nome_plano
+            
             # CRIA UM CARD CHIQUE DE ALTA CONVERSÃO
             card = QFrame()
             card.setStyleSheet("background-color: #262626; border: 1px solid #444; border-radius: 12px; margin-bottom: 5px;")
             card_layout = QVBoxLayout(card)
             
-            # Título e Preço
-            lbl_nome = QLabel(f"⭐ {nome_plano.upper()}")
+            # Título e Preço (Usa o nome maquiado)
+            lbl_nome = QLabel(f"⭐ {nome_exibicao.upper()}")
             lbl_nome.setStyleSheet("font-size: 16px; font-weight: 900; color: white; border: none;")
             
             txt_ciclo = f" / {ciclo}" if ciclo != "Unico" else ""
