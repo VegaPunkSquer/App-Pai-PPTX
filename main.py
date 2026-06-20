@@ -373,22 +373,62 @@ class LojaDialog(QDialog):
         self.worker_vitrine.start()
 
     def montar_planos(self, dados):
+        from PySide6.QtWidgets import QFrame # Garante a importação do QFrame para o visual
+        
         self.produto_id = dados.get("id")
         planos = dados.get("planos_precos", {})
+        
+        # Limpa o container caso a pessoa clique duas vezes
+        while self.container_planos.count():
+            item = self.container_planos.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
         
         if not planos:
             self.lbl_titulo.setText("Nenhum plano configurado no Master.")
             return
             
-        self.lbl_titulo.setText("Escolha o seu Pacote PRO:")
+        self.lbl_titulo.setText("Escolha o Pacote Ideal para Você:")
         
         for nome_plano, detalhes in planos.items():
-            valor = detalhes.get("valor", 0.0)
-            btn = QPushButton(f"🚀 {nome_plano} - R$ {valor:.2f}")
-            btn.setStyleSheet("background-color: #28a745; color: white; padding: 15px; font-weight: bold; font-size: 16px; border-radius: 8px;")
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda checked=False, p=nome_plano: self.comprar_plano(p))
-            self.container_planos.addWidget(btn)
+            valor = float(detalhes.get("valor", 0.0))
+            trial_dias = int(detalhes.get("trial_dias", 0))
+            ciclo = detalhes.get("ciclo", "unico").capitalize()
+            
+            # CRIA UM CARD CHIQUE DE ALTA CONVERSÃO
+            card = QFrame()
+            card.setStyleSheet("background-color: #262626; border: 1px solid #444; border-radius: 12px; margin-bottom: 5px;")
+            card_layout = QVBoxLayout(card)
+            
+            # Título e Preço
+            lbl_nome = QLabel(f"⭐ {nome_plano.upper()}")
+            lbl_nome.setStyleSheet("font-size: 16px; font-weight: 900; color: white; border: none;")
+            
+            txt_ciclo = f" / {ciclo}" if ciclo != "Unico" else ""
+            lbl_preco = QLabel(f"R$ {valor:.2f}{txt_ciclo}")
+            lbl_preco.setStyleSheet("font-size: 24px; font-weight: 800; color: #28a745; border: none;")
+            
+            card_layout.addWidget(lbl_nome)
+            card_layout.addWidget(lbl_preco)
+            
+            # GATILHO MENTAL DO TRIAL (O SEGREDO DA CONVERSÃO!)
+            if trial_dias > 0:
+                lbl_trial = QLabel(f"🎁 {trial_dias} DIAS TOTALMENTE GRÁTIS!")
+                lbl_trial.setStyleSheet("""
+                    font-size: 13px; font-weight: bold; color: #ffc107; 
+                    background-color: rgba(255, 193, 7, 0.1); 
+                    padding: 6px; border-radius: 4px; border: 1px solid #ffc107;
+                """)
+                lbl_trial.setAlignment(Qt.AlignCenter)
+                card_layout.addWidget(lbl_trial)
+            
+            # Botão de Assinar
+            btn_comprar = QPushButton(f"ASSINAR AGORA")
+            btn_comprar.setStyleSheet("background-color: #0078d7; color: white; padding: 12px; font-weight: bold; font-size: 15px; border-radius: 6px; border: none;")
+            btn_comprar.setCursor(Qt.PointingHandCursor)
+            btn_comprar.clicked.connect(lambda checked=False, p=nome_plano: self.comprar_plano(p))
+            
+            card_layout.addWidget(btn_comprar)
+            self.container_planos.addWidget(card)
 
     def comprar_plano(self, plano_nome):
         if not self.token_cliente:
