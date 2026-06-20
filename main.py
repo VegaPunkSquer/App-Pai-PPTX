@@ -6,6 +6,8 @@ import os
 import json
 import subprocess
 import traceback
+import webbrowser
+import time
 from PySide6.QtWidgets import (
     QApplication, QDialog, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QFileDialog, QColorDialog, QMessageBox,
@@ -268,6 +270,175 @@ class LoginCadastroDialog(QDialog):
         self.btn_cadastrar.setText("Criar Conta")
         QMessageBox.critical(self, "Aviso", msg)
 
+# =========================================================
+# LOJA UNIVERSAL (VITRINE, CHECKOUT E CUPÕES)
+# =========================================================
+class WorkerVitrine(QThread):
+    sucesso = Signal(dict)
+    erro = Signal(str)
+
+    def run(self):
+        try:
+            resp = requests.get("https://vegap-masterapp.hf.space/master/vitrine/SmartSlides")
+            if resp.status_code == 200:
+                self.sucesso.emit(resp.json())
+            else:
+                self.erro.emit("Erro ao carregar a vitrine.")
+        except Exception as e:
+            self.erro.emit(str(e))
+
+class WorkerCheckout(QThread):
+    sucesso = Signal(dict)
+    erro = Signal(str)
+
+    def __init__(self, token, produto_id, plano_nome, cupom):
+        super().__init__()
+        self.payload = {
+            "token": token,
+            "produto_id": produto_id,
+            "plano_nome": plano_nome,
+            "cupom": cupom
+        }
+
+    def run(self):
+        try:
+            resp = requests.post("https://vegap-masterapp.hf.space/master/pagamentos/gerar-checkout", json=self.payload)
+            if resp.status_code == 200:
+                self.sucesso.emit(resp.json())
+            else:
+                self.erro.emit(resp.json().get("detail", "Erro desconhecido"))
+        except Exception as e:
+            self.erro.emit(str(e))
+
+class WorkerStatusPagamento(QThread):
+    sucesso = Signal()
+
+    def __init__(self, cobranca_id):
+        super().__init__()
+        self.cobranca_id = cobranca_id
+        self.rodando = True
+
+    def run(self):
+        while self.rodando:
+            try:
+                resp = requests.get(f"https://vegap-masterapp.hf.space/master/pagamentos/checar-status?cobranca_id={self.cobranca_id}")
+                if resp.status_code == 200 and resp.json().get("pago"):
+                    self.sucesso.emit()
+                    break
+            except:
+                pass
+            time.sleep(5)
+
+    def stop(self):
+        self.rodando = False
+
+class LojaDialog(QDialog):
+    def __init__(self, token_cliente, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("🛒 Loja VegaTech - SmartSlides Pro")
+        self.setFixedSize(450, 500)
+        self.token_cliente = token_cliente
+        self.produto_id = None
+        self.worker_status = None
+        self.init_ui()
+        self.carregar_vitrine()
+
+    def init_ui(self):
+        self.layout = QVBoxLayout(self)
+        
+        self.lbl_titulo = QLabel("⏳ A carregar planos disponíveis...")
+        self.lbl_titulo.setAlignment(Qt.AlignCenter)
+        self.lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
+        self.layout.addWidget(self.lbl_titulo)
+        
+        self.container_planos = QVBoxLayout()
+        self.layout.addLayout(self.container_planos)
+        
+        self.layout.addStretch()
+        
+        self.inp_cupom = QLineEdit()
+        self.inp_cupom.setPlaceholderText("Tem um cupão de desconto? (Opcional)")
+        self.inp_cupom.setStyleSheet("font-size: 14px; padding: 10px; border-radius: 5px; border: 1px solid gray;")
+        self.layout.addWidget(self.inp_cupom)
+        
+        self.lbl_status = QLabel("")
+        self.lbl_status.setAlignment(Qt.AlignCenter)
+        self.lbl_status.setStyleSheet("color: #0078d7; font-weight: bold; margin-top: 10px;")
+        self.layout.addWidget(self.lbl_status)
+
+    def carregar_vitrine(self):
+        self.worker_vitrine = WorkerVitrine()
+        self.worker_vitrine.sucesso.connect(self.montar_planos)
+        self.worker_vitrine.erro.connect(lambda e: self.lbl_titulo.setText("Erro ao carregar a loja."))
+        self.worker_vitrine.start()
+
+    def montar_planos(self, dados):
+        self.produto_id = dados.get("id")
+        planos = dados.get("planos_precos", {})
+        
+        if not planos:
+            self.lbl_titulo.setText("Nenhum plano configurado no Master.")
+            return
+            
+        self.lbl_titulo.setText("Escolha o seu Pacote PRO:")
+        
+        for nome_plano, detalhes in planos.items():
+            valor = detalhes.get("valor", 0.0)
+            btn = QPushButton(f"🚀 {nome_plano} - R$ {valor:.2f}")
+            btn.setStyleSheet("background-color: #28a745; color: white; padding: 15px; font-weight: bold; font-size: 16px; border-radius: 8px;")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda checked=False, p=nome_plano: self.comprar_plano(p))
+            self.container_planos.addWidget(btn)
+
+    def comprar_plano(self, plano_nome):
+        if not self.token_cliente:
+            dialog_auth = LoginCadastroDialog(self)
+            if dialog_auth.exec() == QDialog.Accepted:
+                self.token_cliente = dialog_auth.token_recebido
+            else:
+                return
+
+        cupom = self.inp_cupom.text().strip()
+        self.lbl_status.setText("A gerar ambiente seguro de pagamento...")
+        self.setEnabled(False)
+        
+        self.worker_checkout = WorkerCheckout(self.token_cliente, self.produto_id, plano_nome, cupom)
+        self.worker_checkout.sucesso.connect(self.processar_checkout)
+        self.worker_checkout.erro.connect(self.erro_checkout)
+        self.worker_checkout.start()
+
+    def processar_checkout(self, dados):
+        if dados.get("gratuito"):
+            QMessageBox.information(self, "Sucesso", dados.get("mensagem", "Acesso VIP liberado com sucesso!"))
+            self.accept()
+            return
+            
+        checkout_url = dados.get("checkout_url")
+        cobranca_id = dados.get("cobranca_id")
+        
+        if checkout_url:
+            webbrowser.open(checkout_url)
+            self.lbl_status.setText("Navegador aberto! A aguardar o pagamento...")
+            self.setEnabled(True)
+            
+            self.worker_status = WorkerStatusPagamento(cobranca_id)
+            self.worker_status.sucesso.connect(self.pagamento_confirmado)
+            self.worker_status.start()
+
+    def erro_checkout(self, erro):
+        self.setEnabled(True)
+        self.lbl_status.setText("")
+        QMessageBox.critical(self, "Erro", erro)
+
+    def pagamento_confirmado(self):
+        QMessageBox.information(self, "Sucesso", "Pagamento confirmado! Acesso Liberado!")
+        self.accept()
+
+    def closeEvent(self, event):
+        if self.worker_status:
+            self.worker_status.stop()
+        super().closeEvent(event)
+
 # --- JANELA DE CONFIGURAÇÕES ---
 class ConfigDialog(QDialog):
     def __init__(self, current_config, parent=None):
@@ -407,7 +578,7 @@ class ConfigDialog(QDialog):
             if resp == QMessageBox.No:
                 return # Aborta o salvamento, deixa ele na tela para trocar
                 
-        # 2. Barreira do SAAS (Autenticação Obrigatória)
+        # 2. Barreira do SAAS (Autenticação Obrigatória + Checkout na Loja)
         if licenca_escolhida == "SAAS (Chave Embutida)":
             if not self.config.get("token_master"):
                 dialog_auth = LoginCadastroDialog(self)
@@ -415,6 +586,15 @@ class ConfigDialog(QDialog):
                     self.config["token_master"] = dialog_auth.token_recebido
                 else:
                     return # Ele fechou a janela sem logar, então aborta o salvamento
+            
+            # Depois de garantir que o utilizador tem sessão iniciada, abre a Loja!
+            loja = LojaDialog(self.config.get("token_master"), self)
+            if loja.exec() == QDialog.Accepted:
+                # Se ele pagou ou usou o cupão VIP, atualiza o token por precaução e avança
+                self.config["token_master"] = loja.token_cliente
+            else:
+                # Se fechou a loja sem pagar, aborta a ativação da licença SAAS
+                return
 
         # Se passou pelas barreiras, salva tudo
         self.config["license"] = licenca_escolhida
