@@ -279,7 +279,8 @@ class WorkerVitrine(QThread):
 
     def run(self):
         try:
-            resp = requests.get("https://vegap-masterapp.hf.space/master/vitrine/SmartSlides")
+            # Usamos %20 no lugar do espaço para a URL ficar perfeitamente legível pro Master
+            resp = requests.get("https://vegap-masterapp.hf.space/master/vitrine/SmartSlides%20Pro")
             if resp.status_code == 200:
                 self.sucesso.emit(resp.json())
             else:
@@ -351,10 +352,20 @@ class LojaDialog(QDialog):
         self.lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
         self.layout.addWidget(self.lbl_titulo)
         
-        self.container_planos = QVBoxLayout()
-        self.layout.addLayout(self.container_planos)
+        # --- NOVO: SCROLL AREA PARA OS PLANOS NÃO ESMAGAREM ---
+        self.scroll_planos = QScrollArea()
+        self.scroll_planos.setWidgetResizable(True)
+        self.scroll_planos.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
         
-        self.layout.addStretch()
+        self.widget_planos = QWidget()
+        self.widget_planos.setStyleSheet("background-color: transparent;")
+        self.container_planos = QVBoxLayout(self.widget_planos)
+        self.container_planos.setContentsMargins(0, 0, 10, 0) # Margem pra barra de rolagem não colar
+        self.container_planos.setSpacing(10)
+        
+        self.scroll_planos.setWidget(self.widget_planos)
+        self.layout.addWidget(self.scroll_planos)
+        # ------------------------------------------------------
         
         self.inp_cupom = QLineEdit()
         self.inp_cupom.setPlaceholderText("Tem um cupão de desconto? (Opcional)")
@@ -389,7 +400,14 @@ class LojaDialog(QDialog):
             
         self.lbl_titulo.setText("Escolha o Pacote Ideal para Você:")
         
-        for nome_plano, detalhes in planos.items():
+        # MÁGICA DA ORDENAÇÃO: Força a vitrine a seguir a hierarquia clássica de SaaS
+        ordem_ciclos = {"mensal": 1, "trimestral": 2, "semestral": 3, "anual": 4, "unico": 5}
+        planos_ordenados = sorted(
+            planos.items(), 
+            key=lambda x: ordem_ciclos.get(str(x[1].get("ciclo")).lower(), 99)
+        )
+        
+        for nome_plano, detalhes in planos_ordenados:
             valor = float(detalhes.get("valor", 0.0))
             trial_dias = int(detalhes.get("trial_dias", 0))
             ciclo = detalhes.get("ciclo", "unico").capitalize()
@@ -426,7 +444,8 @@ class LojaDialog(QDialog):
             
             # Botão de Assinar
             btn_comprar = QPushButton(f"ASSINAR AGORA")
-            btn_comprar.setStyleSheet("background-color: #0078d7; color: white; padding: 12px; font-weight: bold; font-size: 15px; border-radius: 6px; border: none;")
+            btn_comprar.setMinimumHeight(45) # <--- BLINDAGEM CONTRA ESMAGAMENTO
+            btn_comprar.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; font-size: 15px; border-radius: 6px; border: none;")
             btn_comprar.setCursor(Qt.PointingHandCursor)
             btn_comprar.clicked.connect(lambda checked=False, p=nome_plano: self.comprar_plano(p))
             
