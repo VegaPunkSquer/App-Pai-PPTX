@@ -368,7 +368,7 @@ class LojaDialog(QDialog):
         # ------------------------------------------------------
         
         self.inp_cupom = QLineEdit()
-        self.inp_cupom.setPlaceholderText("Tem um cupão de desconto? (Opcional)")
+        self.inp_cupom.setPlaceholderText("Tem um cupom de desconto? (Opcional)")
         self.inp_cupom.setStyleSheet("font-size: 14px; padding: 10px; border-radius: 5px; border: 1px solid gray;")
         self.layout.addWidget(self.inp_cupom)
         
@@ -652,7 +652,7 @@ class ConfigDialog(QDialog):
             # Depois de garantir que o utilizador tem sessão iniciada, abre a Loja!
             loja = LojaDialog(self.config.get("token_master"), self)
             if loja.exec() == QDialog.Accepted:
-                # Se ele pagou ou usou o cupão VIP, atualiza o token por precaução e avança
+                # Se ele pagou ou usou o cupom VIP, atualiza o token por precaução e avança
                 self.config["token_master"] = loja.token_cliente
             else:
                 # Se fechou a loja sem pagar, aborta a ativação da licença SAAS
