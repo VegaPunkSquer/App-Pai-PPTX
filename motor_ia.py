@@ -52,14 +52,32 @@ def gerar_roteiro_slides(assunto_apresentacao, api_key_usuario=None, modelo_sele
         return False, f"Erro ao inicializar o cliente do Gemini:\n{str(e)}"
     
     prompt = f"""
-    Atue como um especialista em conteúdo educacional. 
-    Crie uma estrutura de apresentação baseada no seguinte pedido: "{assunto_apresentacao}".
-    Retorne APENAS um array JSON válido. 
+    Atue como um designer de apresentações corporativas nível sênior (estilo Gamma/Canva). 
+    Crie uma estrutura de apresentação espetacular baseada no assunto: "{assunto_apresentacao}".
+    Retorne APENAS um array JSON válido. Nada de markdown ou crases em volta, só o JSON cru.
+    
+    Regra de Ouro: Alterne os layouts. Escolha sabiamente entre estes 4 "tipo_layout":
+    1. "padrao": Ideal para a maioria dos slides. Traz um texto base e pode ter imagem lateral.
+    2. "cards": Separa a informação em até 3 blocos/tópicos (ótimo para "benefícios", "fases", etc).
+    3. "destaque": Usado para frases de impacto ou quebra de seção. Fonte gigante, centralizado.
+    4. "grafico": Use APENAS quando houver dados numéricos, estatísticas ou comparações claras para exibir um gráfico de colunas.
+
+    Formato do JSON estritamente exigido:
     [
         {{
             "titulo": "Título do slide",
-            "texto": "Um parágrafo de explicação.",
-            "palavra_chave_imagem": "english keyword for pexels search"
+            "tipo_layout": "padrao", 
+            "texto": "Parágrafo de explicação geral ou a frase de impacto.",
+            "topicos": [
+                {{"icone": "🚀", "titulo": "Ponto 1", "texto": "Breve descrição."}}
+            ],
+            "dados_grafico": {{
+                "categorias": ["2023", "2024", "2025"],
+                "valores": [10, 45, 80],
+                "nome_serie": "Crescimento"
+            }},
+            "palavra_chave_imagem": "termo em ingles para o pexels (vazio se não for layout padrao)",
+            "roteiro_apresentador": "Texto fluido e persuasivo com o que o palestrante DEVE FALAR em voz alta enquanto este slide estiver na tela."
         }}
     ]
     """
