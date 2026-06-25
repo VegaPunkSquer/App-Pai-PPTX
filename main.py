@@ -23,7 +23,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE, MSO_SHAPE
 from pptx.util import Pt
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
-from pptx.enum.text import MSO_AUTO_SIZE
+from pptx.enum.text import MSO_AUTO_SIZE, MSO_VERTICAL_ANCHOR
 import motor_ia
 import ctypes
 import comtypes.client
@@ -665,21 +665,21 @@ class ConfigDialog(QDialog):
                 
         # 2. Barreira do SAAS (Autenticação Obrigatória + Checkout na Loja)
         if licenca_escolhida == "SAAS (Chave Embutida)":
-            if not self.config.get("token_master"):
-                dialog_auth = LoginCadastroDialog(self)
-                if dialog_auth.exec() == QDialog.Accepted:
-                    self.config["token_master"] = dialog_auth.token_recebido
+            # Só abre a loja se o SAAS ainda NÃO estiver ativado na máquina
+            if not self.config.get("saas_ativo"):
+                if not self.config.get("token_master"):
+                    dialog_auth = LoginCadastroDialog(self)
+                    if dialog_auth.exec() == QDialog.Accepted:
+                        self.config["token_master"] = dialog_auth.token_recebido
+                    else:
+                        return 
+                
+                loja = LojaDialog(self.config.get("token_master"), self)
+                if loja.exec() == QDialog.Accepted:
+                    self.config["token_master"] = loja.token_cliente
+                    self.config["saas_ativo"] = True # GRAVA QUE ELE É VIP DEFINITIVAMENTE
                 else:
-                    return # Ele fechou a janela sem logar, então aborta o salvamento
-            
-            # Depois de garantir que o utilizador tem sessão iniciada, abre a Loja!
-            loja = LojaDialog(self.config.get("token_master"), self)
-            if loja.exec() == QDialog.Accepted:
-                # Se ele pagou ou usou o cupom VIP, atualiza o token por precaução e avança
-                self.config["token_master"] = loja.token_cliente
-            else:
-                # Se fechou a loja sem pagar, aborta a ativação da licença SAAS
-                return
+                    return
 
         # Se passou pelas barreiras, salva tudo
         self.config["license"] = licenca_escolhida
@@ -759,6 +759,7 @@ class AppPaiVega(QMainWindow):
         self.config = self.load_config()
         self.last_dir = self.config.get("last_dir", "") # GUARDA A ÚLTIMA PASTA
         self.pptx_path = None
+        self.is_manual_pptx = False # <-- TRAVA ANTI-CONFLITO
         self.last_saved_pptx = None # Guarda o último editado para o conversor de PDF
         self.bg_path = None
         self.text_color = None
@@ -846,10 +847,18 @@ class AppPaiVega(QMainWindow):
 
         hbox_top = QHBoxLayout()
         hbox_top.addStretch()
+        
+        self.btn_tutorial = QPushButton("📚 Como Usar")
+        self.btn_tutorial.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 5px;")
+        self.btn_tutorial.setCursor(Qt.PointingHandCursor)
+        self.btn_tutorial.clicked.connect(self.abrir_tutorial)
+        hbox_top.addWidget(self.btn_tutorial)
+        
         self.btn_config = QPushButton("⚙️ Configurações / Licença")
         self.btn_config.setCursor(Qt.PointingHandCursor)
         self.btn_config.clicked.connect(self.open_config)
         hbox_top.addWidget(self.btn_config)
+        
         self.main_layout.addLayout(hbox_top)
 
         self.btn_load = QPushButton("1. Carregar Apresentação Pronta (.pptx)")
@@ -1153,6 +1162,7 @@ class AppPaiVega(QMainWindow):
             self.last_dir = os.path.dirname(path)
             self.save_config()
             self.pptx_path = path
+            self.is_manual_pptx = True # <-- ACIONA O ALARME DE CONFLITO
             self.lbl_pptx.setText(os.path.basename(path))
 
     def choose_text_color(self):
@@ -1215,6 +1225,22 @@ class AppPaiVega(QMainWindow):
                     combo.setCurrentIndex(index)
 
     def gerar_com_ia(self):
+        # --- PROTEÇÃO ANTI-CONFLITO DE ARQUIVOS ---
+        if self.pptx_path and getattr(self, 'is_manual_pptx', False):
+            resp = QMessageBox.warning(
+                self, 
+                "Atenção: Substituir Arquivo?", 
+                "Você já carregou uma apresentação pronta no aplicativo (Botão 1).\n\nSe você usar a IA agora, a apresentação que você carregou será descartada e substituída por uma nova.\n\nDeseja descartar a apresentação atual e continuar com a IA?", 
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if resp == QMessageBox.No:
+                return # Aborta e deixa o cara quieto com o arquivo dele
+            else:
+                # Limpa a trava e a tela para a IA trabalhar do zero
+                self.pptx_path = None
+                self.is_manual_pptx = False
+                self.lbl_pptx.setText("Nenhum arquivo selecionado")
+                
         licensa = self.config.get("license", "FREE")
         
         if licensa == "FREE":
@@ -1557,6 +1583,10 @@ class AppPaiVega(QMainWindow):
                         except: pass
                     
                     if shape.has_text_frame:
+                        # --- BLINDAGEM DO ITEM 2: Ancora o texto no topo ---
+                        from pptx.enum.text import MSO_VERTICAL_ANCHOR
+                        shape.text_frame.vertical_anchor = MSO_VERTICAL_ANCHOR.TOP
+                        
                         for paragraph in shape.text_frame.paragraphs:
                             for run in paragraph.runs:
                                 if txt_rgb:
@@ -1617,6 +1647,74 @@ class AppPaiVega(QMainWindow):
 
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Erro ao processar arquivo:\n{str(e)}")
+            
+    def abrir_tutorial(self):
+        from PySide6.QtCore import QPoint
+        
+        # Estrutura da Mágica: (Widget Alvo, Direção da Seta, Título, Texto)
+        passos = [
+            (self.txt_tema, "cima", "Passo 1: O Início e as Licenças", 
+             "Bem-vindo ao SmartSlides Pro!\n\nVocê tem dois caminhos:\n1. Digite um tema na caixa acima e deixe a IA criar a apresentação do zero.\n\n⚠️ ATENÇÃO: A Inteligência Artificial é um recurso PREMIUM. No plano FREE (Grátis), a IA não funciona e o botão fica bloqueado! Você precisa ativar o plano SAAS ou colocar sua chave BYOK no botão '⚙️ Configurações / Licença' lá no topo.\n\n2. Se você já tem um PPTX pronto e só quer maquiá-lo, use o 'Botão 1' lá em cima."),
+            
+            (None, "centro", "Passo 2: As Imagens", 
+             "Após a IA pensar, uma nova janela vai se abrir.\n\nNela, você escolherá as fotos sugeridas para cada slide. Se não quiser foto em algum slide, marque a opção 'Não usar imagem'. Só depois de confirmar as fotos é que a apresentação nasce!"),
+            
+            (self.combo_presets, "esquerda", "Passo 3: A Maquiagem", 
+             "Aqui começa o design da sua apresentação.\n\n- Use esta caixa ao lado para aplicar Formatações Prontas (Presets).\n- Ou, logo abaixo, mude manualmente a Cor do Texto, a Cor de Fundo e as Fontes dos Títulos e do Corpo."),
+            
+            (self.slider_scale, "baixo", "Passo 4: Os Ajustes Finos", 
+             "Veja as caixinhas e sliders abaixo!\n\nUse-os para diminuir o tamanho das fotos ou aumentar o tamanho das letras. \n\nLembre-se: Você precisa marcar a caixinha (Checkbox) para destrancar o slider. Olhe para o Mini-Slide no rodapé, ele mostra a mágica acontecendo em tempo real!"),
+            
+            (self.btn_save, "baixo", "Passo 5: O Grande Final", 
+             "Tudo pronto?\n\nClique no botão cinza escuro abaixo ('Processar Apresentação e Salvar'). O aplicativo vai aplicar todas as cores, fontes e recortes que você escolheu e gerar o seu arquivo PPTX final na hora.\n\nPronto! Já pode ir pro palco.")
+        ]
+        
+        for alvo, direcao, titulo, texto in passos:
+            dialog = QDialog(self)
+            dialog.setWindowTitle(titulo)
+            # Remove o botão de Fechar (X) da janela para forçar a leitura
+            dialog.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint)
+            
+            layout = QVBoxLayout(dialog)
+            
+            seta = ""
+            if direcao == "esquerda": seta = "⬅️ OLHE PARA A ESQUERDA\n\n"
+            elif direcao == "cima": seta = "⬆️ OLHE PARA A CAIXA ACIMA\n\n"
+            elif direcao == "baixo": seta = "⬇️ OLHE PARA OS BOTÕES ABAIXO\n\n"
+            
+            # Formatação HTML para a seta ficar vermelha e gigante
+            lbl_texto = QLabel(f"<b><span style='color:#d9534f; font-size:18px;'>{seta}</span></b>{texto}")
+            lbl_texto.setWordWrap(True)
+            lbl_texto.setStyleSheet("font-size: 14px; color: #333;")
+            lbl_texto.setMinimumWidth(350)
+            layout.addWidget(lbl_texto)
+            
+            btn_ok = QPushButton("Entendi, Próximo ➔" if titulo != passos[-1][2] else "Concluir Tutorial ✔️")
+            btn_ok.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 10px; border-radius: 4px;")
+            btn_ok.setCursor(Qt.PointingHandCursor)
+            btn_ok.clicked.connect(dialog.accept)
+            layout.addWidget(btn_ok)
+            
+            dialog.adjustSize()
+            
+            # A Engenharia de Posicionamento Físico
+            if alvo:
+                # Descobre a coordenada X e Y exata do widget alvo na tela
+                pos_alvo = alvo.mapToGlobal(QPoint(0, 0))
+                
+                if direcao == "esquerda":
+                    # Coloca o balão à direita do alvo, apontando pra esquerda
+                    dialog.move(pos_alvo.x() + alvo.width() + 15, pos_alvo.y())
+                elif direcao == "cima":
+                    # Coloca o balão abaixo do alvo, apontando pra cima
+                    dialog.move(pos_alvo.x(), pos_alvo.y() + alvo.height() + 15)
+                elif direcao == "baixo":
+                    # Coloca o balão acima do alvo, apontando pra baixo
+                    dialog.move(pos_alvo.x(), pos_alvo.y() - dialog.height() - 15)
+            
+            # Se o usuário apertar a tecla ESC do teclado, aborta o tutorial
+            if dialog.exec() == QDialog.Rejected:
+                break
 
     def export_to_pdf(self):
         # Tenta pegar o último que o usuário editou/salvou. Se não tiver, pega o que ele carregou no passo 1.
