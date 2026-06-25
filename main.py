@@ -9,7 +9,7 @@ import traceback
 import webbrowser
 import time
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QApplication, QDialog, QFrame, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QLabel, QFileDialog, QColorDialog, QFontDialog, QMessageBox,
     QCheckBox, QSpinBox, QTextEdit, QScrollArea, QListWidget, QSlider, QProgressDialog,
     QTabWidget, QComboBox, QLineEdit, QInputDialog
@@ -720,25 +720,6 @@ class WorkerIAGerador(QThread):
                     
                 self.roteiro = roteiro_ou_erro
 
-                # Salva o Histórico local silenciosamente
-                try:
-                    import json, os
-                    from datetime import datetime
-                    hist_path = os.path.join(base_dir, "historico_roteiros.json")
-                    historico = []
-                    if os.path.exists(hist_path):
-                        with open(hist_path, "r", encoding="utf-8") as f:
-                            historico = json.load(f)
-                    historico.append({
-                        "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-                        "tema": self.tema,
-                        "roteiro": self.roteiro
-                    })
-                    if len(historico) > 5: historico = historico[-5:]
-                    with open(hist_path, "w", encoding="utf-8") as f:
-                        json.dump(historico, f, indent=4, ensure_ascii=False)
-                except: pass
-
             # 2. Baixando as Imagens
             total_slides = len(self.roteiro)
             self.progresso.emit(20, "Estrutura pronta! Buscando imagens...")
@@ -924,34 +905,60 @@ class AppPaiVega(QMainWindow):
         self.main_layout.addLayout(hbox_text)
         
         # --- SELEÇÃO DE FONTE COM PREVIEW (SUGESTÃO 4) ---
-        hbox_font = QHBoxLayout()
-        self.combo_font = QComboBox()
+        # --- SELEÇÃO DE FONTES (ITEM 2) ---
         fontes_comuns = ["Padrão do Tema", "Arial", "Calibri", "Century Gothic", "Georgia", "Segoe UI", "Tahoma", "Times New Roman", "Trebuchet MS", "Verdana"]
-        self.combo_font.addItems(fontes_comuns)
-        self.combo_font.setCursor(Qt.PointingHandCursor)
         
-        # Mágica 1: Faz os itens do dropdown aparecerem com a própria fonte
+        # FONTE DOS TÍTULOS
+        hbox_font_title = QHBoxLayout()
+        self.combo_font_title = QComboBox()
+        self.combo_font_title.addItems(fontes_comuns)
+        self.combo_font_title.setCursor(Qt.PointingHandCursor)
         for i, nome_fonte in enumerate(fontes_comuns):
             if nome_fonte != "Padrão do Tema":
-                self.combo_font.setItemData(i, QFont(nome_fonte), Qt.FontRole)
+                self.combo_font_title.setItemData(i, QFont(nome_fonte), Qt.FontRole)
 
-        # Mágica 2: Label de Preview Dinâmico
-        self.lbl_font_preview = QLabel("Aa Exemplo")
-        self.lbl_font_preview.setStyleSheet("font-size: 16px; color: gray;")
-        self.combo_font.currentTextChanged.connect(self.atualizar_preview_fonte)
+        self.lbl_font_title_preview = QLabel("Aa Título")
+        self.lbl_font_title_preview.setStyleSheet("font-size: 18px; color: gray; font-weight: bold;")
+        self.combo_font_title.currentTextChanged.connect(
+            lambda f: self.lbl_font_title_preview.setStyleSheet(f"font-size: 18px; font-family: '{f}'; font-weight: bold; color: #0078d7;") if f != "Padrão do Tema" else self.lbl_font_title_preview.setStyleSheet("font-size: 18px; color: gray; font-weight: bold;")
+        )
         
-        # O botãozinho maroto para adicionar fontes novas
         self.btn_add_font = QPushButton("➕ Nova Fonte")
         self.btn_add_font.setCursor(Qt.PointingHandCursor)
         self.btn_add_font.clicked.connect(self.adicionar_fonte_customizada)
         self.btn_add_font.setStyleSheet("padding: 4px; font-weight: bold;")
+
+        hbox_font_title.addWidget(QLabel("📝 Fonte dos Títulos:"))
+        hbox_font_title.addWidget(self.combo_font_title)
+        hbox_font_title.addWidget(self.btn_add_font)
+        hbox_font_title.addWidget(self.lbl_font_title_preview)
+        hbox_font_title.addStretch()
+        self.main_layout.addLayout(hbox_font_title)
+
+        # FONTE DOS TEXTOS (CORPO)
+        hbox_font_body = QHBoxLayout()
+        self.combo_font_body = QComboBox()
+        self.combo_font_body.addItems(fontes_comuns)
+        self.combo_font_body.setCursor(Qt.PointingHandCursor)
+        for i, nome_fonte in enumerate(fontes_comuns):
+            if nome_fonte != "Padrão do Tema":
+                self.combo_font_body.setItemData(i, QFont(nome_fonte), Qt.FontRole)
+                
+        # Avisa o mini-slide quando o usuário trocar as fontes
+        self.combo_font_title.currentTextChanged.connect(self.atualizar_preview_real)
+        self.combo_font_body.currentTextChanged.connect(self.atualizar_preview_real)
+
+        self.lbl_font_body_preview = QLabel("Aa Corpo")
+        self.lbl_font_body_preview.setStyleSheet("font-size: 14px; color: gray;")
+        self.combo_font_body.currentTextChanged.connect(
+            lambda f: self.lbl_font_body_preview.setStyleSheet(f"font-size: 14px; font-family: '{f}'; color: #0078d7;") if f != "Padrão do Tema" else self.lbl_font_body_preview.setStyleSheet("font-size: 14px; color: gray;")
+        )
         
-        hbox_font.addWidget(QLabel("📝 Escolher Fonte de Todo o Texto (Opcional):"))
-        hbox_font.addWidget(self.combo_font)
-        hbox_font.addWidget(self.btn_add_font)
-        hbox_font.addWidget(self.lbl_font_preview)
-        hbox_font.addStretch()
-        self.main_layout.addLayout(hbox_font)
+        hbox_font_body.addWidget(QLabel("📝 Fonte dos Textos:"))
+        hbox_font_body.addWidget(self.combo_font_body)
+        hbox_font_body.addWidget(self.lbl_font_body_preview)
+        hbox_font_body.addStretch()
+        self.main_layout.addLayout(hbox_font_body)
 
         hbox_fill = QHBoxLayout()
         self.btn_fill_color = QPushButton("3. Escolher Cor de Fundo dos Cards (Opcional)")
@@ -976,49 +983,78 @@ class AppPaiVega(QMainWindow):
         hbox_bg.addStretch()
         self.main_layout.addLayout(hbox_bg)
 
+        # --- 5. REDUÇÃO DE IMAGENS COM SLIDER ---
         hbox_scale = QHBoxLayout()
-        self.chk_scale = QCheckBox("5. Reduzir imagens em (%):")
-        self.spin_scale = QSpinBox()
-        self.spin_scale.setRange(1, 99)
-        self.spin_scale.setValue(20)
-        self.spin_scale.setEnabled(False) 
-        self.chk_scale.toggled.connect(self.spin_scale.setEnabled)
+        self.chk_scale = QCheckBox("5. Reduzir imagens em:")
+        self.slider_scale = QSlider(Qt.Horizontal)
+        self.slider_scale.setRange(1, 99)
+        self.slider_scale.setValue(20)
+        self.slider_scale.setEnabled(False)
+        self.lbl_scale_val = QLabel("20%")
+        self.lbl_scale_val.setStyleSheet("font-weight: bold;")
+        
+        self.chk_scale.toggled.connect(self.slider_scale.setEnabled)
+        self.slider_scale.valueChanged.connect(lambda v: self.lbl_scale_val.setText(f"{v}%"))
         
         hbox_scale.addWidget(self.chk_scale)
-        hbox_scale.addWidget(self.spin_scale)
-        hbox_scale.addStretch()
+        hbox_scale.addWidget(self.slider_scale)
+        hbox_scale.addWidget(self.lbl_scale_val)
         self.main_layout.addLayout(hbox_scale)
 
-        # 5.1. Aumentar Textos
+        # --- 5.1. AUMENTO DE TEXTOS COM SLIDER ---
         hbox_text_scale = QHBoxLayout()
-        self.chk_text_scale = QCheckBox("5.1. Aumentar textos (Título e Corpo) em (%):")
-        self.spin_text_scale = QSpinBox()
-        self.spin_text_scale.setRange(1, 150)
-        self.spin_text_scale.setValue(20)
-        self.spin_text_scale.setEnabled(False) 
+        self.chk_text_scale = QCheckBox("5.1. Aumentar textos em:")
+        self.slider_text_scale = QSlider(Qt.Horizontal)
+        self.slider_text_scale.setRange(1, 150)
+        self.slider_text_scale.setValue(20)
+        self.slider_text_scale.setEnabled(False)
+        self.lbl_text_scale_val = QLabel("20%")
+        self.lbl_text_scale_val.setStyleSheet("font-weight: bold;")
         
-        self.lbl_text_preview = QLabel("Aa Exemplo")
-        self.lbl_text_preview.setStyleSheet("color: gray; font-size: 14px;")
-        self.lbl_text_preview.setVisible(False)
-
-        def update_text_preview():
-            if self.chk_text_scale.isChecked():
-                self.lbl_text_preview.setVisible(True)
-                base_px = 14
-                new_px = int(base_px * (1 + (self.spin_text_scale.value() / 100.0)))
-                self.lbl_text_preview.setStyleSheet(f"color: #28a745; font-size: {new_px}px; font-weight: bold;")
-            else:
-                self.lbl_text_preview.setVisible(False)
-
-        self.chk_text_scale.toggled.connect(self.spin_text_scale.setEnabled)
-        self.chk_text_scale.toggled.connect(update_text_preview)
-        self.spin_text_scale.valueChanged.connect(update_text_preview)
-
+        self.chk_text_scale.toggled.connect(self.slider_text_scale.setEnabled)
+        self.slider_text_scale.valueChanged.connect(lambda v: self.lbl_text_scale_val.setText(f"{v}%"))
+        
         hbox_text_scale.addWidget(self.chk_text_scale)
-        hbox_text_scale.addWidget(self.spin_text_scale)
-        hbox_text_scale.addWidget(self.lbl_text_preview)
-        hbox_text_scale.addStretch()
+        hbox_text_scale.addWidget(self.slider_text_scale)
+        hbox_text_scale.addWidget(self.lbl_text_scale_val)
         self.main_layout.addLayout(hbox_text_scale)
+
+        # --- PREVISÃO AO VIVO (MINI-SLIDE) ---
+        hbox_preview = QHBoxLayout()
+        self.frame_preview = QFrame()
+        self.frame_preview.setFixedSize(320, 180) # Formato 16:9 perfeito
+        self.frame_preview.setStyleSheet("background-color: white; border: 2px solid #ccc; border-radius: 8px;")
+        
+        # Elementos posicionados de forma absoluta no slide virtual
+        self.lbl_preview_text = QLabel("Título Exemplo\n\nEste é o corpo do texto.\nVeja como ele cresce.", self.frame_preview)
+        self.lbl_preview_text.setGeometry(10, 10, 180, 160)
+        self.lbl_preview_text.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.lbl_preview_text.setStyleSheet("color: #333; border: none; font-size: 10px;")
+
+        self.lbl_preview_img = QLabel(self.frame_preview)
+        self.lbl_preview_img.setStyleSheet("background-color: #2b5c8f; border-radius: 5px; border: none;")
+        self.lbl_preview_img.setGeometry(190, 40, 100, 100) # Posição e tamanho base
+
+        hbox_preview.addStretch()
+        hbox_preview.addWidget(self.frame_preview)
+        hbox_preview.addStretch()
+        self.main_layout.addLayout(hbox_preview)
+        
+        # Liga os gatilhos dos sliders e checkboxes ao método da classe
+        self.chk_scale.toggled.connect(self.atualizar_preview_real)
+        self.slider_scale.valueChanged.connect(self.atualizar_preview_real)
+        self.chk_text_scale.toggled.connect(self.atualizar_preview_real)
+        self.slider_text_scale.valueChanged.connect(self.atualizar_preview_real)
+        
+        self.atualizar_preview_real() # Força o primeiro desenho
+
+        # Liga os gatilhos dos sliders e checkboxes à função de animação
+        self.chk_scale.toggled.connect(self.atualizar_preview_real)
+        self.slider_scale.valueChanged.connect(self.atualizar_preview_real)
+        self.chk_text_scale.toggled.connect(self.atualizar_preview_real)
+        self.slider_text_scale.valueChanged.connect(self.atualizar_preview_real)
+        
+        self.atualizar_preview_real() # Força o primeiro desenho # Força o primeiro desenho
         
         # --- CHAVE PARA LIGAR/DESLIGAR AS ANOTAÇÕES (SUGESTÃO 2) ---
         hbox_notes = QHBoxLayout()
@@ -1059,6 +1095,57 @@ class AppPaiVega(QMainWindow):
             
             self.btn_gerar_ia.setEnabled(True)
             self.btn_gerar_ia.setStyleSheet("background-color: #2b5c8f; color: white; font-weight: bold; padding: 10px;")
+            
+    def atualizar_preview_real(self, *args):
+        # --- 1. CAPTURAR AS FONTES E CORES ATUAIS ---
+        fonte_titulo = self.combo_font_title.currentText()
+        fonte_corpo = self.combo_font_body.currentText()
+        
+        fam_titulo = f"font-family: '{fonte_titulo}';" if fonte_titulo != "Padrão do Tema" else ""
+        fam_corpo = f"font-family: '{fonte_corpo}';" if fonte_corpo != "Padrão do Tema" else ""
+        
+        cor_txt = f"color: {self.text_color.name()};" if self.text_color else "color: #333;"
+        
+        # --- 2. ESCALA DO TEXTO ---
+        base_px = 10
+        if self.chk_text_scale.isChecked():
+            new_px = int(base_px * (1 + (self.slider_text_scale.value() / 100.0)))
+        else:
+            new_px = base_px
+            
+        # O truque sujo: Usar HTML no widget nativo para separar Título do Corpo perfeitamente
+        html_texto = f"""
+        <div style="{fam_titulo} font-size: {new_px + 4}px; font-weight: bold; {cor_txt} margin-bottom: 5px;">
+            Título Exemplo
+        </div>
+        <div style="{fam_corpo} font-size: {new_px}px; {cor_txt}">
+            Este é o corpo do texto.<br>Veja como ele cresce e muda.
+        </div>
+        """
+        self.lbl_preview_text.setText(html_texto)
+        self.lbl_preview_text.setStyleSheet("background-color: transparent; border: none;")
+
+        # --- 3. FUNDO DO SLIDE (IMAGEM OU BRANCO) ---
+        self.frame_preview.setObjectName("PreviewSlide") # Nomeia o frame para a imagem não bugar
+        if self.bg_path:
+            bg_limpo = self.bg_path.replace("\\", "/")
+            # Usamos border-image com o ID (#PreviewSlide) para esticar a foto no 16:9 perfeito
+            self.frame_preview.setStyleSheet(f"#PreviewSlide {{ border-image: url('{bg_limpo}'); border: 2px solid #ccc; border-radius: 8px; }}")
+        else:
+            self.frame_preview.setStyleSheet("#PreviewSlide { background-color: white; border: 2px solid #ccc; border-radius: 8px; }")
+
+        # --- 4. COR E ESCALA DO CARD/IMAGEM (O QUADRADO) ---
+        cor_fundo = self.fill_color.name() if self.fill_color else "#2b5c8f"
+        self.lbl_preview_img.setStyleSheet(f"background-color: {cor_fundo}; border-radius: 5px; border: none;")
+        
+        if self.chk_scale.isChecked():
+            base_w, base_h = 100, 100
+            fator = 1.0 - (self.slider_scale.value() / 100.0)
+            new_w, new_h = int(base_w * fator), int(base_h * fator)
+            centro_x, centro_y = 240, 90 
+            self.lbl_preview_img.setGeometry(centro_x - (new_w // 2), centro_y - (new_h // 2), new_w, new_h)
+        else:
+            self.lbl_preview_img.setGeometry(190, 40, 100, 100)
 
     def load_pptx(self):
         path, _ = QFileDialog.getOpenFileName(self, "Selecionar PPTX", self.last_dir, "PowerPoint (*.pptx)")
@@ -1073,12 +1160,25 @@ class AppPaiVega(QMainWindow):
         if color.isValid():
             self.text_color = color
             self.lbl_text_color_indicator.setStyleSheet(f"background-color: {color.name()}; border: 1px solid gray; border-radius: 12px;")
+            self.atualizar_preview_real() # Avisa o mini-slide imediatamente
 
     def choose_fill_color(self):
         color = QColorDialog.getColor()
         if color.isValid():
             self.fill_color = color
             self.lbl_fill_color_indicator.setStyleSheet(f"background-color: {color.name()}; border: 1px solid gray; border-radius: 12px;")
+            self.atualizar_preview_real() # Avisa o mini-slide imediatamente
+            
+    def load_bg(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Selecionar Imagem de Fundo", self.last_dir, "Imagens (*.png *.jpg *.jpeg)")
+        if path:
+            self.last_dir = os.path.dirname(path)
+            self.save_config()
+            self.bg_path = path
+            pixmap = QPixmap(path)
+            self.lbl_bg_preview.setPixmap(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            self.lbl_bg_preview.setStyleSheet("border: 1px solid gray;") 
+            self.atualizar_preview_real() # Avisa o mini-slide imediatamente
             
     def aplicar_preset(self):
         preset = self.combo_presets.currentText()
@@ -1098,75 +1198,42 @@ class AppPaiVega(QMainWindow):
         # Atualiza as bolinhas de cor para o usuário ver o que aconteceu
         self.lbl_text_color_indicator.setStyleSheet(f"background-color: {self.text_color.name()}; border: 1px solid gray; border-radius: 12px;")
         self.lbl_fill_color_indicator.setStyleSheet(f"background-color: {self.fill_color.name()}; border: 1px solid gray; border-radius: 12px;")
-        
-    def atualizar_preview_fonte(self, fonte_nome):
-        if fonte_nome == "Padrão do Tema":
-            self.lbl_font_preview.setStyleSheet("font-size: 16px; color: gray;")
-        else:
-            # Aplica a fonte escolhida no CSS do label de exemplo
-            self.lbl_font_preview.setStyleSheet(f"font-size: 18px; font-family: '{fonte_nome}'; font-weight: bold; color: #0078d7;")
             
     def adicionar_fonte_customizada(self):
-        # Abre o seletor nativo de fontes do sistema
         ok, font = QFontDialog.getFont(self)
         if ok:
             nome_fonte = font.family()
-            
-            # Verifica se a fonte já está na lista pra não duplicar
-            index = self.combo_font.findText(nome_fonte)
-            
-            if index == -1:
-                # Adiciona a fonte nova no final da lista
-                self.combo_font.addItem(nome_fonte)
-                novo_index = self.combo_font.count() - 1
-                
-                # Faz a mágica de mostrar ela com a própria fonte na lista
-                self.combo_font.setItemData(novo_index, QFont(nome_fonte), Qt.FontRole)
-                
-                # Já seleciona a fonte recém-adicionada
-                self.combo_font.setCurrentIndex(novo_index)
-            else:
-                # Se já existia, só muda pra ela
-                self.combo_font.setCurrentIndex(index)
+            # Adiciona a fonte escolhida nos DOIS dropdowns de uma vez
+            for combo in [self.combo_font_title, self.combo_font_body]:
+                index = combo.findText(nome_fonte)
+                if index == -1:
+                    combo.addItem(nome_fonte)
+                    novo_index = combo.count() - 1
+                    combo.setItemData(novo_index, QFont(nome_fonte), Qt.FontRole)
+                    combo.setCurrentIndex(novo_index)
+                else:
+                    combo.setCurrentIndex(index)
 
-    def load_bg(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Selecionar Imagem de Fundo", self.last_dir, "Imagens (*.png *.jpg *.jpeg)")
-        if path:
-            self.last_dir = os.path.dirname(path)
-            self.save_config()
-            self.bg_path = path
-            pixmap = QPixmap(path)
-            self.lbl_bg_preview.setPixmap(pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            self.lbl_bg_preview.setStyleSheet("border: 1px solid gray;") 
-
-    def gerar_com_ia(self, roteiro_carregado=None):
+    def gerar_com_ia(self):
         licensa = self.config.get("license", "FREE")
         
-        # Só barra o usuário e faz validação de internet/tema se NÃO estiver carregando do histórico
-        if not roteiro_carregado:
-            if licensa == "FREE":
-                QMessageBox.warning(self, "Recurso Premium", "A geração por IA é um recurso Premium.")
-                return
+        if licensa == "FREE":
+            QMessageBox.warning(self, "Recurso Premium", "A geração por IA é um recurso Premium.")
+            return
 
-            tema = self.txt_tema.toPlainText().strip()
-            if not tema:
-                QMessageBox.warning(self, "Aviso", "Por favor, introduza o tema primeiro!")
-                return
-            
-            api_key_usuario = self.config.get("api_key") if licensa == "BYOK (Sua Chave)" else None
-            sucesso_check, msg_check = motor_ia.testar_conectividade(api_key_usuario)
-            if not sucesso_check:
-                QMessageBox.critical(self, "Bloqueio na IA", f"Conexão recusada:\n\n{msg_check}")
-                return
-        else:
-            tema = "Histórico Recuperado"
-            api_key_usuario = None
-            
+        tema = self.txt_tema.toPlainText().strip()
+        if not tema:
+            QMessageBox.warning(self, "Aviso", "Por favor, introduza o tema primeiro!")
+            return
+        
         api_key_usuario = self.config.get("api_key") if licensa == "BYOK (Sua Chave)" else None
         modelo = self.config.get("model", "gemini-2.5-flash")
-
-        from PySide6.QtCore import QEventLoop
         
+        sucesso_check, msg_check = motor_ia.testar_conectividade(api_key_usuario)
+        if not sucesso_check:
+            QMessageBox.critical(self, "Bloqueio na IA", f"Conexão recusada:\n\n{msg_check}")
+            return
+            
         from PySide6.QtCore import QEventLoop
 
         try:
@@ -1181,7 +1248,7 @@ class AppPaiVega(QMainWindow):
             self.btn_historico.setEnabled(False)
 
             # Inicia o Trabalho Paralelo
-            worker = WorkerIAGerador(tema, api_key_usuario, modelo, roteiro_carregado)
+            worker = WorkerIAGerador(tema, api_key_usuario, modelo)
             # Liga o progresso da thread direto na barra da tela
             worker.progresso.connect(lambda v, t: (progress.setValue(v), progress.setLabelText(t)))
             progress.canceled.connect(worker.requestInterruption)
@@ -1238,11 +1305,13 @@ class AppPaiVega(QMainWindow):
                 tem_imagem = i in selected_images and selected_images[i] != "NONE" and tipo_layout == "padrao"
                 largura_texto = int(prs.slide_width * 0.45) if tem_imagem else int(prs.slide_width * 0.88)
 
-                # --- CAIXA DE TÍTULO ---
-                top_titulo = int(prs.slide_height * 0.35) if tipo_layout == "destaque" else int(prs.slide_height * 0.10)
-                altura_titulo = int(prs.slide_height * 0.30) if tipo_layout == "destaque" else int(prs.slide_height * 0.20)
+                # --- CAIXA DE TÍTULO (ITEM 4 - Esticado no slide) ---
+                largura_titulo = int(prs.slide_width * 0.88) # Ignora a lateral e abraça 88% do topo
+                top_titulo = int(prs.slide_height * 0.35) if tipo_layout == "destaque" else int(prs.slide_height * 0.06)
+                altura_titulo = int(prs.slide_height * 0.30) if tipo_layout == "destaque" else int(prs.slide_height * 0.15)
                 
-                title_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), top_titulo, largura_texto, altura_titulo)
+                title_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), top_titulo, largura_titulo, altura_titulo)
+                title_box.name = "TitleBox_Vega" # Colocamos uma etiqueta invisível pra identificar na edição
                 tf_title = title_box.text_frame
                 tf_title.word_wrap = True
                 tf_title.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE 
@@ -1308,6 +1377,7 @@ class AppPaiVega(QMainWindow):
                 elif tipo_layout != "destaque":
                     # Layout Padrão (Agora com suporte a Bullet Points e Ícones da IA)
                     body_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), int(prs.slide_height * 0.32), largura_texto, int(prs.slide_height * 0.60))
+                    body_box.name = "BodyBox_Vega" # Etiqueta invisível do corpo
                     tf_body = body_box.text_frame
                     tf_body.word_wrap = True
                     tf_body.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE 
@@ -1332,9 +1402,9 @@ class AppPaiVega(QMainWindow):
                 if tem_imagem:
                     try:
                         img_left = int(prs.slide_width * 0.54)
-                        img_top = int(prs.slide_height * 0.1)
+                        img_top = int(prs.slide_height * 0.22) # Desceu de 0.1 para 0.22 para fugir do título
                         img_max_w = int(prs.slide_width * 0.42)
-                        img_max_h = int(prs.slide_height * 0.8)
+                        img_max_h = int(prs.slide_height * 0.68)
 
                         pic = slide.shapes.add_picture(selected_images[i], img_left, img_top)
                         ratio = min(img_max_w / pic.width, img_max_h / pic.height)
@@ -1355,6 +1425,43 @@ class AppPaiVega(QMainWindow):
 
             temp_path = os.path.join(base_dir, "apresentacao_ia_temp.pptx")
             prs.save(temp_path)
+            
+            # --- SALVANDO O PPTX FÍSICO NO HISTÓRICO (ITEM 3) ---
+            try:
+                import shutil
+                from datetime import datetime
+                pasta_hist = os.path.join(base_dir, "historico_geracoes")
+                if not os.path.exists(pasta_hist):
+                    os.makedirs(pasta_hist)
+                
+                # Cria um nome limpo e seguro pro arquivo
+                tema_limpo = "".join([c for c in tema if c.isalpha() or c.isdigit() or c==' ']).rstrip()[:30]
+                data_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+                nome_arq = f"{data_str}_{tema_limpo.replace(' ', '_')}.pptx"
+                caminho_salvo = os.path.join(pasta_hist, nome_arq)
+                
+                shutil.copy2(temp_path, caminho_salvo)
+                
+                # Salva a referência no JSON
+                hist_json = os.path.join(base_dir, "historico_roteiros.json")
+                historico = []
+                if os.path.exists(hist_json):
+                    with open(hist_json, "r", encoding="utf-8") as f:
+                        historico = json.load(f)
+                        
+                historico.append({
+                    "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                    "tema": tema,
+                    "caminho": caminho_salvo
+                })
+                
+                if len(historico) > 10: # Guarda as últimas 10 gerações inteiras
+                    historico = historico[-10:]
+                    
+                with open(hist_json, "w", encoding="utf-8") as f:
+                    json.dump(historico, f, indent=4, ensure_ascii=False)
+            except Exception as e:
+                print(f"Erro no backup do PPTX: {e}")
             
             try:
                 for caminhos in slide_images_dict.values():
@@ -1392,25 +1499,31 @@ class AppPaiVega(QMainWindow):
         except:
             historico = []
 
-        if not historico:
-            QMessageBox.information(self, "Histórico Vazio", "O arquivo de histórico está vazio.")
+        # Remove da lista arquivos que o usuário apagou manualmente do PC
+        historico_valido = [h for h in historico if "caminho" in h and os.path.exists(h["caminho"])]
+
+        if not historico_valido:
+            QMessageBox.information(self, "Histórico Vazio", "Nenhuma apresentação física foi encontrada. Gere uma nova!")
             return
 
-        # Monta a lista pro usuário escolher (do mais recente pro mais antigo)
-        itens = [f"{item['data']} - {item.get('tema', 'Tema Desconhecido')}" for item in reversed(historico)]
+        # Monta a lista pro usuário escolher
+        itens = [f"{item['data']} - {item.get('tema', 'Tema Desconhecido')}" for item in reversed(historico_valido)]
         
         item_selecionado, ok = QInputDialog.getItem(
-            self, "Recuperar Apresentação", 
-            "Escolha um roteiro gerado anteriormente:", 
+            self, "Recuperar Apresentação Pronta", 
+            "Escolha um PPTX já gerado anteriormente:", 
             itens, 0, False
         )
 
         if ok and item_selecionado:
             idx = itens.index(item_selecionado)
-            roteiro_escolhido = list(reversed(historico))[idx]["roteiro"]
+            caminho_escolhido = list(reversed(historico_valido))[idx]["caminho"]
             
-            # Chama a montagem gráfica, pulando a cobrança na API
-            self.gerar_com_ia(roteiro_carregado=roteiro_escolhido)
+            # MÁGICA: Carrega o PPTX nativo instantaneamente para o processador final
+            self.pptx_path = caminho_escolhido
+            self.lbl_pptx.setText(f"📁 Recuperado: {os.path.basename(caminho_escolhido)}")
+            
+            QMessageBox.information(self, "Sucesso Absoluto", "Apresentação recuperada instantaneamente!\n\nVocê já pode escolher suas fontes e cores e ir direto pro Passo 6 (Processar e Salvar).")
 
     def process_and_save(self):
         if not self.pptx_path:
@@ -1432,7 +1545,7 @@ class AppPaiVega(QMainWindow):
             for slide in prs.slides:
                 for shape in slide.shapes:
                     if self.chk_scale.isChecked() and shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-                        scale = 1.0 - (self.spin_scale.value() / 100.0)
+                        scale = 1.0 - (self.slider_scale.value() / 100.0)
                         nw, nh = int(shape.width * scale), int(shape.height * scale)
                         shape.left += int((shape.width - nw) / 2)
                         shape.top += int((shape.height - nh) / 2)
@@ -1448,13 +1561,21 @@ class AppPaiVega(QMainWindow):
                             for run in paragraph.runs:
                                 if txt_rgb:
                                     run.font.color.rgb = txt_rgb
-                                    # --- APLICA A FONTE CUSTOMIZADA (SUGESTÃO 4) ---
-                                fonte_escolhida = self.combo_font.currentText()
-                                if fonte_escolhida != "Padrão do Tema":
-                                    run.font.name = fonte_escolhida
+                                    # --- APLICA A FONTE CUSTOMIZADA (ITEM 2) ---
+                                    # Heurística: Se nós marcamos como título ou se a fonte base é maior que 24, é título.
+                                    is_title = (shape.name == "TitleBox_Vega")
+                                    if run.font.size:
+                                        if run.font.size >= Pt(24): is_title = True
+                                    elif paragraph.font.size and paragraph.font.size >= Pt(24):
+                                        is_title = True
+                                        
+                                    fonte_escolhida = self.combo_font_title.currentText() if is_title else self.combo_font_body.currentText()
+                                    
+                                    if fonte_escolhida != "Padrão do Tema":
+                                        run.font.name = fonte_escolhida
                                 
                                 if self.chk_text_scale.isChecked():
-                                    percentual = self.spin_text_scale.value()
+                                    percentual = self.slider_text_scale.value()
                                     fator = 1.0 + (percentual / 100.0)
                                     tamanho = run.font.size if run.font.size is not None else paragraph.font.size
                                     if tamanho is None:
