@@ -1,21 +1,71 @@
-import requests
-
-from atualizador import checar_e_atualizar
 import sys
 import os
-import json
-import subprocess
-import traceback
-import webbrowser
+
+# --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
+if getattr(sys, 'frozen', False):
+    base_dir = os.path.dirname(sys.executable)
+    bundle_dir = sys._MEIPASS
+else:
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    bundle_dir = base_dir
+
+CONFIG_FILE = os.path.join(base_dir, "config.json")
+
+# ==========================================
+# 🚀 O SEGREDO DA VELOCIDADE: SPLASH SCREEN NO TOPO
+# ==========================================
+# Importamos APENAS o essencial visual para a tela abrir instantaneamente
+from PySide6.QtWidgets import QApplication, QSplashScreen, QLabel, QProgressBar
+from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt
+
+class SplashScreenVega(QSplashScreen):
+    def __init__(self, caminho_img):
+        pixmap = QPixmap(caminho_img).scaled(600, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        super().__init__(pixmap, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        
+        self.lbl_status = QLabel("Iniciando SmartSlides Pro...", self)
+        self.lbl_status.setStyleSheet("color: white; font-weight: bold; font-size: 13px; background-color: rgba(0,0,0,150); padding: 2px; border-radius: 4px;")
+        self.lbl_status.setAlignment(Qt.AlignCenter)
+        self.lbl_status.setGeometry(20, pixmap.height() - 70, pixmap.width() - 40, 25)
+        
+        self.barra = QProgressBar(self)
+        self.barra.setGeometry(20, pixmap.height() - 40, pixmap.width() - 40, 20)
+        self.barra.setStyleSheet("""
+            QProgressBar { border: 1px solid #555; border-radius: 5px; background-color: #222; text-align: center; color: white; font-weight: bold; }
+            QProgressBar::chunk { background-color: #0078d7; border-radius: 4px; }
+        """)
+
+    def atualizar(self, valor, texto):
+        self.barra.setValue(valor)
+        self.lbl_status.setText(texto)
+        QApplication.processEvents()
+
+# Inicia o núcleo e mostra a imagem ANTES do Python ler o resto do arquivo!
+app = None
+splash = None
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    caminho_splash = os.path.join(bundle_dir, "assets", "SmartSlides.png")
+    splash = SplashScreenVega(caminho_splash)
+    splash.show()
+    splash.atualizar(5, "Iniciando o núcleo do aplicativo...")
+
+# ==========================================
+# IMPORTS PESADOS (Carregam enquanto a Splash já está na tela)
+# ==========================================
+if splash: splash.atualizar(15, "Carregando bibliotecas de interface (PySide6)...")
 import time
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QFrame, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QPushButton, QLabel, QFileDialog, QColorDialog, QFontDialog, QMessageBox,
+    QDialog, QFrame, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+    QPushButton, QFileDialog, QColorDialog, QFontDialog, QMessageBox,
     QCheckBox, QSpinBox, QTextEdit, QScrollArea, QListWidget, QSlider, QProgressDialog,
     QTabWidget, QComboBox, QLineEdit, QInputDialog
 )
-from PySide6.QtGui import QColor, QPixmap, QFont, QPalette, QIcon
-from PySide6.QtCore import QThread, Qt, QSize, Signal
+from PySide6.QtGui import QColor, QFont, QPalette, QIcon
+from PySide6.QtCore import QThread, QSize, Signal
+
+if splash: splash.atualizar(40, "Carregando motor do PowerPoint (isso leva uns segundos)...")
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.dml import MSO_FILL
@@ -24,9 +74,17 @@ from pptx.util import Pt
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.text import MSO_AUTO_SIZE, MSO_VERTICAL_ANCHOR
+
+if splash: splash.atualizar(75, "Conectando motores de Inteligência Artificial...")
+import requests
 import motor_ia
+import json
+import subprocess
+import traceback
+import webbrowser
 import ctypes
 import comtypes.client
+from atualizador import checar_e_atualizar
 
 # --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
 if getattr(sys, 'frozen', False):
@@ -767,7 +825,10 @@ class AppPaiVega(QMainWindow):
 
         self.init_ui()
         self.apply_theme()
-        self.apply_zoom(self.config.get("zoom", 100))
+        self.apply_zoom(self.config.get("zoom", 100)),
+        
+        # Verifica se o atualizador deixou algum recado de novidades
+        self.checar_notas_atualizacao()
 
     def load_config(self):
         if os.path.exists(CONFIG_FILE):
@@ -828,7 +889,7 @@ class AppPaiVega(QMainWindow):
         app.setPalette(palette)
 
     def apply_zoom(self, val):
-        base_size = 9
+        base_size = 11 # AUMENTADO PARA CEGUETAS (Padrão era 9)
         new_size = int(base_size * (val / 100.0))
         font = self.font()
         font.setPointSize(new_size)
@@ -864,7 +925,7 @@ class AppPaiVega(QMainWindow):
         self.btn_load = QPushButton("1. Carregar Apresentação Pronta (.pptx)")
         self.btn_load.clicked.connect(self.load_pptx)
         self.lbl_pptx = QLabel("Nenhum arquivo selecionado")
-        self.lbl_pptx.setStyleSheet("color: gray; font-style: italic;")
+        self.lbl_pptx.setStyleSheet("color: #d9534f; font-weight: bold; font-size: 15px;") # Vermelho, gordo e grande
 
         self.main_layout.addWidget(self.btn_load)
         self.main_layout.addWidget(self.lbl_pptx)
@@ -1157,6 +1218,17 @@ class AppPaiVega(QMainWindow):
             self.lbl_preview_img.setGeometry(190, 40, 100, 100)
 
     def load_pptx(self):
+        # --- TRAVA REVERSA (Impede o cara de jogar a IA no lixo sem querer) ---
+        if self.pptx_path and not getattr(self, 'is_manual_pptx', True):
+            resp = QMessageBox.critical(
+                self, 
+                "⚠️ ALERTA: Apresentação da IA já carregada!", 
+                "VOCÊ JÁ GEROU UMA APRESENTAÇÃO COM A INTELIGÊNCIA ARTIFICIAL!\n\nSe você carregar um arquivo antigo do seu computador agora, VAI APAGAR a apresentação nova que a IA acabou de fazer.\n\nTem CERTEZA ABSOLUTA que quer jogar a da IA no lixo e carregar outro arquivo?", 
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if resp == QMessageBox.No:
+                return # Aborta e salva a vida do usuário
+        
         path, _ = QFileDialog.getOpenFileName(self, "Selecionar PPTX", self.last_dir, "PowerPoint (*.pptx)")
         if path:
             self.last_dir = os.path.dirname(path)
@@ -1337,8 +1409,9 @@ class AppPaiVega(QMainWindow):
                 altura_titulo = int(prs.slide_height * 0.30) if tipo_layout == "destaque" else int(prs.slide_height * 0.15)
                 
                 title_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), top_titulo, largura_titulo, altura_titulo)
-                title_box.name = "TitleBox_Vega" # Colocamos uma etiqueta invisível pra identificar na edição
+                title_box.name = "TitleBox_Vega"
                 tf_title = title_box.text_frame
+                tf_title.vertical_anchor = MSO_VERTICAL_ANCHOR.TOP # ALINHA NO TETO
                 tf_title.word_wrap = True
                 tf_title.auto_size = MSO_AUTO_SIZE.TEXT_TO_FIT_SHAPE 
                 
@@ -1354,7 +1427,7 @@ class AppPaiVega(QMainWindow):
                     if num_cards > 0:
                         largura_card = int(largura_texto / num_cards) - int(prs.slide_width * 0.02)
                         altura_card = int(prs.slide_height * 0.55)
-                        top_card = int(prs.slide_height * 0.32)
+                        top_card = int(prs.slide_height * 0.24)
                         left_inicial = int(prs.slide_width * 0.06)
 
                         for j, topico in enumerate(slide_data["topicos"][:num_cards]):
@@ -1393,7 +1466,7 @@ class AppPaiVega(QMainWindow):
                         chart_data.categories = categorias
                         chart_data.add_series(nome_serie, valores)
 
-                        x, y = int(prs.slide_width * 0.06), int(prs.slide_height * 0.32)
+                        x, y = int(prs.slide_width * 0.06), int(prs.slide_height * 0.24)
                         cx, cy = int(prs.slide_width * 0.88), int(prs.slide_height * 0.60)
                         
                         slide.shapes.add_chart(
@@ -1402,7 +1475,7 @@ class AppPaiVega(QMainWindow):
 
                 elif tipo_layout != "destaque":
                     # Layout Padrão (Agora com suporte a Bullet Points e Ícones da IA)
-                    body_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), int(prs.slide_height * 0.32), largura_texto, int(prs.slide_height * 0.60))
+                    body_box = slide.shapes.add_textbox(int(prs.slide_width * 0.06), int(prs.slide_height * 0.24), largura_texto, int(prs.slide_height * 0.60))
                     body_box.name = "BodyBox_Vega" # Etiqueta invisível do corpo
                     tf_body = body_box.text_frame
                     tf_body.word_wrap = True
@@ -1428,7 +1501,7 @@ class AppPaiVega(QMainWindow):
                 if tem_imagem:
                     try:
                         img_left = int(prs.slide_width * 0.54)
-                        img_top = int(prs.slide_height * 0.22) # Desceu de 0.1 para 0.22 para fugir do título
+                        img_top = int(prs.slide_height * 0.24) # Desceu de 0.1 para 0.22 para fugir do título
                         img_max_w = int(prs.slide_width * 0.42)
                         img_max_h = int(prs.slide_height * 0.68)
 
@@ -1715,6 +1788,26 @@ class AppPaiVega(QMainWindow):
             # Se o usuário apertar a tecla ESC do teclado, aborta o tutorial
             if dialog.exec() == QDialog.Rejected:
                 break
+            
+    def checar_notas_atualizacao(self):
+        notas_path = os.path.join(base_dir, "release_notes.txt")
+        if os.path.exists(notas_path):
+            try:
+                with open(notas_path, "r", encoding="utf-8") as f:
+                    texto_notas = f.read().strip()
+                
+                if texto_notas:
+                    msg = QMessageBox(self)
+                    msg.setWindowTitle("🚀 Aplicativo Atualizado!")
+                    msg.setText("O SmartSlides Pro foi atualizado com sucesso!\n\nVeja o que há de novo nesta versão:\n\n" + texto_notas)
+                    msg.setIcon(QMessageBox.Information)
+                    msg.setStandardButtons(QMessageBox.Ok)
+                    msg.exec()
+                
+                # Apaga o arquivo imediatamente para não mostrar de novo no próximo acesso
+                os.remove(notas_path)
+            except Exception as e:
+                pass # Se der erro de permissão, apenas ignora e segue a vida
 
     def export_to_pdf(self):
         # Tenta pegar o último que o usuário editou/salvou. Se não tiver, pega o que ele carregou no passo 1.
@@ -1748,16 +1841,58 @@ class AppPaiVega(QMainWindow):
         except Exception as e:
             progress.close()
             QMessageBox.critical(self, "Erro no PDF", f"Falha ao converter.\nVerifique se o PowerPoint não está com janelas de diálogo travando o fundo.\n\nDetalhes:\n{str(e)}")
+            
+# ==========================================
+# TELA DE CARREGAMENTO (SPLASH SCREEN)
+# ==========================================
+class SplashScreenVega(QSplashScreen):
+    def __init__(self, caminho_img):
+        pixmap = QPixmap(caminho_img).scaled(600, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        super().__init__(pixmap, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        
+        # O Rótulo de Status
+        self.lbl_status = QLabel("Iniciando SmartSlides Pro...", self)
+        self.lbl_status.setStyleSheet("color: white; font-weight: bold; font-size: 13px; background-color: rgba(0,0,0,150); padding: 2px; border-radius: 4px;")
+        self.lbl_status.setAlignment(Qt.AlignCenter)
+        self.lbl_status.setGeometry(20, pixmap.height() - 70, pixmap.width() - 40, 25)
+        
+        # A Barra de Progresso
+        self.barra = QProgressBar(self)
+        self.barra.setGeometry(20, pixmap.height() - 40, pixmap.width() - 40, 20)
+        self.barra.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #555;
+                border-radius: 5px;
+                background-color: #222;
+                text-align: center;
+                color: white;
+                font-weight: bold;
+            }
+            QProgressBar::chunk {
+                background-color: #0078d7;
+                border-radius: 4px;
+            }
+        """)
+
+    def atualizar(self, valor, texto):
+        self.barra.setValue(valor)
+        self.lbl_status.setText(texto)
+        QApplication.processEvents() # Força a tela a desenhar imediatamente
+        import time; time.sleep(0.3) # Dá uma micro pausa pro olho humano conseguir ler o texto
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    
-    # 1. GIRA A CHAVE DO RADAR ANTES DE ABRIR O APP
+    splash.atualizar(85, "Verificando radares e atualizações do sistema...")
     if checar_e_atualizar():
-        # Se achou atualização e o usuário aceitou, o app morre aqui para substituir o arquivo
         os._exit(0)
         
-    # 2. Se não tem atualização, abre a janela normalmente
+    splash.atualizar(95, "Preparando interface gráfica e blindagens...")
     window = AppPaiVega()
+    
+    splash.atualizar(100, "Tudo pronto! Bem-vindo(a) ao palco.")
+    time.sleep(0.5)
+    
+    # Destrói a Splash Screen e revela a janela verdadeira
+    splash.finish(window)
     window.show()
+    
     sys.exit(app.exec())

@@ -1,6 +1,6 @@
 {
     "nome": "SmartSlides Pro",
-    "versao_atual": "v1.2.4",
+    "versao_atual": "v1.3.0",
     "repo": "https://github.com/VegaPunkSquer/App-Pai-PPTX",
     "builds": {
         "desktop": "exe.bat"

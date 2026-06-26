@@ -36,6 +36,7 @@ def checar_e_atualizar(parent_widget=None):
             dados = resp.json()
             versao_nuvem = dados.get("versao_atual")
             link_download = dados.get("link_download")
+            notas_atualizacao = dados.get("notas_atualizacao", "").strip() # <--- PEGA AS NOTAS AQUI
 
             if versao_nuvem and versao_nuvem != VERSAO_LOCAL and link_download:
                 msg = QMessageBox(parent_widget)
@@ -48,14 +49,14 @@ def checar_e_atualizar(parent_widget=None):
                 msg.setDefaultButton(QMessageBox.Yes)
 
                 if msg.exec() == QMessageBox.Yes:
-                    _baixar_e_instalar(link_download, parent_widget)
+                    _baixar_e_instalar(link_download, parent_widget, notas_atualizacao) # <--- PASSA AS NOTAS
                     return True
     except Exception as e:
         print(f"Aviso silencioso: Falha ao checar atualização - {e}")
         pass
     return False
 
-def _baixar_e_instalar(url, parent_widget):
+def _baixar_e_instalar(url, parent_widget, notas=""):
     exe_atual = os.path.abspath(sys.executable)
     diretorio_base = os.path.dirname(exe_atual)
     exe_novo = os.path.join(diretorio_base, "update_temporario.exe")
@@ -87,6 +88,16 @@ def _baixar_e_instalar(url, parent_widget):
                 tamanho_baixado += len(chunk)
                 if tamanho_total > 0:
                     progresso.setValue(int((tamanho_baixado / tamanho_total) * 100))
+
+        # --- A GERAÇÃO DO RELEASE NOTES ---
+        if notas:
+            caminho_notas = os.path.join(diretorio_base, "release_notes.txt")
+            try:
+                with open(caminho_notas, "w", encoding="utf-8") as f:
+                    f.write(notas)
+            except Exception:
+                pass
+        # ----------------------------------
 
         # Pega o nome real do arquivo (útil caso você tenha renomeado ele na Área de Trabalho)
         nome_exe_original = os.path.basename(exe_atual)
