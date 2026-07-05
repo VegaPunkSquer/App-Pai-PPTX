@@ -1147,8 +1147,20 @@ class AppPaiVega(QMainWindow):
         self.btn_pdf.clicked.connect(self.export_to_pdf)
         self.main_layout.addWidget(self.btn_pdf)
 
-        self.setCentralWidget(self.main_container)
-        self.update_main_ui_lock() 
+        # =========================================================
+        # MÁGICA RESPONSIVA: Barra de Rolagem Inteligente
+        # =========================================================
+        from PySide6.QtWidgets import QScrollArea
+        
+        self.scroll_principal = QScrollArea()
+        self.scroll_principal.setWidgetResizable(True) # Faz o conteúdo expandir na horizontal normalmente
+        self.scroll_principal.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        self.scroll_principal.setWidget(self.main_container)
+        
+        # Agora o widget central da tela é a área de rolagem, que guarda todo o resto dentro dela
+        self.setCentralWidget(self.scroll_principal)
+        
+        self.update_main_ui_lock()   
 
     def update_main_ui_lock(self):
         if self.config.get("license", "FREE") == "FREE":
