@@ -723,21 +723,27 @@ class ConfigDialog(QDialog):
                 
         # 2. Barreira do SAAS (Autenticação Obrigatória + Checkout na Loja)
         if licenca_escolhida == "SAAS (Chave Embutida)":
-            # Só abre a loja se o SAAS ainda NÃO estiver ativado na máquina
-            if not self.config.get("saas_ativo"):
+            # SÓ ABRE A LOJA SE O USUÁRIO AINDA NÃO ATIVOU O SAAS DEFINITIVAMENTE!
+            ja_era_saas = (self.config.get("license") == "SAAS (Chave Embutida)") and self.config.get("token_master")
+            
+            if not self.config.get("saas_ativo") and not ja_era_saas:
                 if not self.config.get("token_master"):
                     dialog_auth = LoginCadastroDialog(self)
                     if dialog_auth.exec() == QDialog.Accepted:
                         self.config["token_master"] = dialog_auth.token_recebido
                     else:
-                        return 
+                        return # Ele fechou a janela sem logar, então aborta o salvamento
                 
+                # Abre a Loja apenas se for a primeira ativação do SaaS!
                 loja = LojaDialog(self.config.get("token_master"), self)
                 if loja.exec() == QDialog.Accepted:
                     self.config["token_master"] = loja.token_cliente
-                    self.config["saas_ativo"] = True # GRAVA QUE ELE É VIP DEFINITIVAMENTE
+                    self.config["saas_ativo"] = True # <--- GRAVA A PERMISSÃO ETERNA!
                 else:
                     return
+            else:
+                # Garante que a flag fique salva na memória se ele já tinha o plano
+                self.config["saas_ativo"] = True
 
         # Se passou pelas barreiras, salva tudo
         self.config["license"] = licenca_escolhida
@@ -820,7 +826,8 @@ class AppPaiVega(QMainWindow):
         self.is_manual_pptx = False # <-- TRAVA ANTI-CONFLITO
         self.last_saved_pptx = None # Guarda o último editado para o conversor de PDF
         self.bg_path = None
-        self.text_color = None
+        self.text_color_title = None # <-- COR SEPARADA DO TÍTULO
+        self.text_color_body = None  # <-- COR SEPARADA DO CORPO
         self.fill_color = None
 
         self.init_ui()
@@ -920,6 +927,14 @@ class AppPaiVega(QMainWindow):
         self.btn_config.clicked.connect(self.open_config)
         hbox_top.addWidget(self.btn_config)
         
+        # --- NOVO: BOTÃO PARA LER O RELEASE NOTES A QUALQUER MOMENTO ---
+        self.btn_novidades = QPushButton("📋 Novidades")
+        self.btn_novidades.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 5px;")
+        self.btn_novidades.setCursor(Qt.PointingHandCursor)
+        self.btn_novidades.clicked.connect(self.abrir_novidades)
+        hbox_top.addWidget(self.btn_novidades)
+        # ---------------------------------------------------------------
+        
         self.main_layout.addLayout(hbox_top)
 
         self.btn_load = QPushButton("1. Carregar Apresentação Pronta (.pptx)")
@@ -964,15 +979,30 @@ class AppPaiVega(QMainWindow):
         hbox_preset.addStretch()
         self.main_layout.addLayout(hbox_preset)
 
-        hbox_text = QHBoxLayout()
-        self.btn_text_color = QPushButton("2. Escolher Cor de Todo o Texto (Opcional)")
-        self.btn_text_color.clicked.connect(self.choose_text_color)
-        self.lbl_text_color_indicator = self.create_color_indicator()
+        # --- 2. SELEÇÃO DE COR DE TEXTO SEPARADA (ITEM 3) ---
+        hbox_color_title = QHBoxLayout()
+        self.btn_color_title = QPushButton("🎨 Cor dos Títulos")
+        self.btn_color_title.setCursor(Qt.PointingHandCursor)
+        self.btn_color_title.clicked.connect(self.choose_title_color)
+        self.lbl_color_title_indicator = self.create_color_indicator()
         
-        hbox_text.addWidget(self.btn_text_color)
-        hbox_text.addWidget(self.lbl_text_color_indicator)
-        hbox_text.addStretch()
-        self.main_layout.addLayout(hbox_text)
+        hbox_color_title.addWidget(QLabel("2. Cor dos Títulos:"))
+        hbox_color_title.addWidget(self.btn_color_title)
+        hbox_color_title.addWidget(self.lbl_color_title_indicator)
+        hbox_color_title.addStretch()
+        self.main_layout.addLayout(hbox_color_title)
+
+        hbox_color_body = QHBoxLayout()
+        self.btn_color_body = QPushButton("🎨 Cor dos Textos (Corpo/Cards)")
+        self.btn_color_body.setCursor(Qt.PointingHandCursor)
+        self.btn_color_body.clicked.connect(self.choose_body_color)
+        self.lbl_color_body_indicator = self.create_color_indicator()
+        
+        hbox_color_body.addWidget(QLabel("2.1. Cor dos Textos:"))
+        hbox_color_body.addWidget(self.btn_color_body)
+        hbox_color_body.addWidget(self.lbl_color_body_indicator)
+        hbox_color_body.addStretch()
+        self.main_layout.addLayout(hbox_color_body)
         
         # --- SELEÇÃO DE FONTE COM PREVIEW (SUGESTÃO 4) ---
         # --- SELEÇÃO DE FONTES (ITEM 2) ---
@@ -1053,14 +1083,14 @@ class AppPaiVega(QMainWindow):
         hbox_bg.addStretch()
         self.main_layout.addLayout(hbox_bg)
 
-        # --- 5. REDUÇÃO DE IMAGENS COM SLIDER ---
+        # --- 5. ESCALA DE IMAGENS COM SLIDER (DIMINUI E AUMENTA - ITEM 2) ---
         hbox_scale = QHBoxLayout()
-        self.chk_scale = QCheckBox("5. Reduzir imagens em:")
+        self.chk_scale = QCheckBox("5. Escala das imagens:")
         self.slider_scale = QSlider(Qt.Horizontal)
-        self.slider_scale.setRange(1, 99)
-        self.slider_scale.setValue(20)
+        self.slider_scale.setRange(10, 200) # 10% até 200% do tamanho
+        self.slider_scale.setValue(100) # 100% é o tamanho original exacto
         self.slider_scale.setEnabled(False)
-        self.lbl_scale_val = QLabel("20%")
+        self.lbl_scale_val = QLabel("100%")
         self.lbl_scale_val.setStyleSheet("font-weight: bold;")
         
         self.chk_scale.toggled.connect(self.slider_scale.setEnabled)
@@ -1130,7 +1160,12 @@ class AppPaiVega(QMainWindow):
         hbox_notes = QHBoxLayout()
         self.chk_notes = QCheckBox("5.2. Inserir Roteiro do Apresentador nas anotações nativas")
         self.chk_notes.setChecked(True) # Deixamos ativo por padrão, o usuário desmarca se quiser
+        
+        self.chk_barra_lateral = QCheckBox("5.3. Exibir barra azul lateral")
+        self.chk_barra_lateral.setChecked(True)
+        
         hbox_notes.addWidget(self.chk_notes)
+        hbox_notes.addWidget(self.chk_barra_lateral)
         hbox_notes.addStretch()
         self.main_layout.addLayout(hbox_notes)
 
@@ -1186,7 +1221,9 @@ class AppPaiVega(QMainWindow):
         fam_titulo = f"font-family: '{fonte_titulo}';" if fonte_titulo != "Padrão do Tema" else ""
         fam_corpo = f"font-family: '{fonte_corpo}';" if fonte_corpo != "Padrão do Tema" else ""
         
-        cor_txt = f"color: {self.text_color.name()};" if self.text_color else "color: #333;"
+        # --- 1. CAPTURAR AS CORES SEPARADAS (ITEM 3) ---
+        cor_titulo = f"color: {self.text_color_title.name()};" if self.text_color_title else "color: #1e3c5a;"
+        cor_corpo = f"color: {self.text_color_body.name()};" if self.text_color_body else "color: #333;"
         
         # --- 2. ESCALA DO TEXTO ---
         base_px = 10
@@ -1197,10 +1234,10 @@ class AppPaiVega(QMainWindow):
             
         # O truque sujo: Usar HTML no widget nativo para separar Título do Corpo perfeitamente
         html_texto = f"""
-        <div style="{fam_titulo} font-size: {new_px + 4}px; font-weight: bold; {cor_txt} margin-bottom: 5px;">
+        <div style="{fam_titulo} font-size: {new_px + 4}px; font-weight: bold; {cor_titulo} margin-bottom: 5px;">
             Título Exemplo
         </div>
-        <div style="{fam_corpo} font-size: {new_px}px; {cor_txt}">
+        <div style="{fam_corpo} font-size: {new_px}px; {cor_corpo}">
             Este é o corpo do texto.<br>Veja como ele cresce e muda.
         </div>
         """
@@ -1222,7 +1259,7 @@ class AppPaiVega(QMainWindow):
         
         if self.chk_scale.isChecked():
             base_w, base_h = 100, 100
-            fator = 1.0 - (self.slider_scale.value() / 100.0)
+            fator = self.slider_scale.value() / 100.0 # <--- 0.5 encolhe pela metade, 1.5 cresce 50%
             new_w, new_h = int(base_w * fator), int(base_h * fator)
             centro_x, centro_y = 240, 90 
             self.lbl_preview_img.setGeometry(centro_x - (new_w // 2), centro_y - (new_h // 2), new_w, new_h)
@@ -1249,12 +1286,19 @@ class AppPaiVega(QMainWindow):
             self.is_manual_pptx = True # <-- ACIONA O ALARME DE CONFLITO
             self.lbl_pptx.setText(os.path.basename(path))
 
-    def choose_text_color(self):
+    def choose_title_color(self):
         color = QColorDialog.getColor()
         if color.isValid():
-            self.text_color = color
-            self.lbl_text_color_indicator.setStyleSheet(f"background-color: {color.name()}; border: 1px solid gray; border-radius: 12px;")
-            self.atualizar_preview_real() # Avisa o mini-slide imediatamente
+            self.text_color_title = color
+            self.lbl_color_title_indicator.setStyleSheet(f"background-color: {color.name()}; border: 1px solid gray; border-radius: 12px;")
+            self.atualizar_preview_real()
+
+    def choose_body_color(self):
+        color = QColorDialog.getColor()
+        if color.isValid():
+            self.text_color_body = color
+            self.lbl_color_body_indicator.setStyleSheet(f"background-color: {color.name()}; border: 1px solid gray; border-radius: 12px;")
+            self.atualizar_preview_real()
 
     def choose_fill_color(self):
         color = QColorDialog.getColor()
@@ -1276,22 +1320,25 @@ class AppPaiVega(QMainWindow):
             
     def aplicar_preset(self):
         preset = self.combo_presets.currentText()
-        if preset == "Personalizado (Manual)":
-            return # Deixa as cores como estão se voltar pro manual
+        if preset == "Personalizado (Manual)": return
             
         if preset == "Corporativo Azul":
-            self.text_color = QColor(30, 60, 90)
-            self.fill_color = QColor(240, 248, 255) # Alice Blue
+            self.text_color_title = QColor(30, 60, 90)
+            self.text_color_body = QColor(40, 50, 60)
+            self.fill_color = QColor(240, 248, 255)
         elif preset == "Dark Mode Clássico":
-            self.text_color = QColor(255, 255, 255)
+            self.text_color_title = QColor(255, 255, 255)
+            self.text_color_body = QColor(220, 220, 220)
             self.fill_color = QColor(45, 45, 45)
         elif preset == "Minimalista Clean":
-            self.text_color = QColor(0, 0, 0)
+            self.text_color_title = QColor(0, 0, 0)
+            self.text_color_body = QColor(50, 50, 50)
             self.fill_color = QColor(255, 255, 255)
             
-        # Atualiza as bolinhas de cor para o usuário ver o que aconteceu
-        self.lbl_text_color_indicator.setStyleSheet(f"background-color: {self.text_color.name()}; border: 1px solid gray; border-radius: 12px;")
+        self.lbl_color_title_indicator.setStyleSheet(f"background-color: {self.text_color_title.name()}; border: 1px solid gray; border-radius: 12px;")
+        self.lbl_color_body_indicator.setStyleSheet(f"background-color: {self.text_color_body.name()}; border: 1px solid gray; border-radius: 12px;")
         self.lbl_fill_color_indicator.setStyleSheet(f"background-color: {self.fill_color.name()}; border: 1px solid gray; border-radius: 12px;")
+        self.atualizar_preview_real()
             
     def adicionar_fonte_customizada(self):
         ok, font = QFontDialog.getFont(self)
@@ -1407,6 +1454,8 @@ class AppPaiVega(QMainWindow):
                 barra_lateral.fill.solid()
                 barra_lateral.fill.fore_color.rgb = RGBColor(43, 92, 143) 
                 barra_lateral.line.fill.background() 
+                
+                barra_lateral.name = "BarraLateral_Vega" # ETIQUETA PARA CONTROLE DE LIGA/DESLIGA
 
                 # --- LÓGICA DINÂMICA DE LARGURA (ITEM 3) ---
                 # --- LEITURA DO DESIGN DA IA ---
@@ -1650,13 +1699,30 @@ class AppPaiVega(QMainWindow):
 
         try:
             prs = Presentation(self.pptx_path)
-            txt_rgb = RGBColor(self.text_color.red(), self.text_color.green(), self.text_color.blue()) if self.text_color else None
+            title_rgb = RGBColor(self.text_color_title.red(), self.text_color_title.green(), self.text_color_title.blue()) if self.text_color_title else None
+            body_rgb = RGBColor(self.text_color_body.red(), self.text_color_body.green(), self.text_color_body.blue()) if self.text_color_body else None
             fill_rgb = RGBColor(self.fill_color.red(), self.fill_color.green(), self.fill_color.blue()) if self.fill_color else None
 
             for slide in prs.slides:
+                # --- 1. CONTROLE DE LIGA/DESLIGA DA BARRA LATERAL (ITEM 1) ---
+                shapes_para_remover = []
                 for shape in slide.shapes:
+                    # Identifica a barra tanto pela etiqueta nova quanto pelo formato antigo
+                    is_barra = (shape.name == "BarraLateral_Vega") or (shape.left == 0 and shape.top == 0 and shape.width <= int(prs.slide_width * 0.03) and shape.height == prs.slide_height)
+                    if not self.chk_barra_lateral.isChecked() and is_barra:
+                        shapes_para_remover.append(shape)
+                        
+                for s_rem in shapes_para_remover:
+                    slide.shapes._spTree.remove(s_rem._element)
+
+                # --- 2. PROCESSAMENTO DAS OUTRAS FORMAS ---
+                for shape in slide.shapes:
+                    is_barra = (shape.name == "BarraLateral_Vega") or (shape.left == 0 and shape.top == 0 and shape.width <= int(prs.slide_width * 0.03) and shape.height == prs.slide_height)
+                    if is_barra:
+                        continue # Pula a barra lateral para não estragar a cor dela caso escolha cor de card!
+                        
                     if self.chk_scale.isChecked() and shape.shape_type == MSO_SHAPE_TYPE.PICTURE:
-                        scale = 1.0 - (self.slider_scale.value() / 100.0)
+                        scale = self.slider_scale.value() / 100.0 # <--- ESCALA BIDIRECIONAL (ITEM 2)
                         nw, nh = int(shape.width * scale), int(shape.height * scale)
                         shape.left += int((shape.width - nw) / 2)
                         shape.top += int((shape.height - nh) / 2)
@@ -1668,26 +1734,25 @@ class AppPaiVega(QMainWindow):
                         except: pass
                     
                     if shape.has_text_frame:
-                        # --- BLINDAGEM DO ITEM 2: Ancora o texto no topo ---
-                        from pptx.enum.text import MSO_VERTICAL_ANCHOR
                         shape.text_frame.vertical_anchor = MSO_VERTICAL_ANCHOR.TOP
-                        
                         for paragraph in shape.text_frame.paragraphs:
                             for run in paragraph.runs:
-                                if txt_rgb:
-                                    run.font.color.rgb = txt_rgb
-                                    # --- APLICA A FONTE CUSTOMIZADA (ITEM 2) ---
-                                    # Heurística: Se nós marcamos como título ou se a fonte base é maior que 24, é título.
-                                    is_title = (shape.name == "TitleBox_Vega")
-                                    if run.font.size:
-                                        if run.font.size >= Pt(24): is_title = True
-                                    elif paragraph.font.size and paragraph.font.size >= Pt(24):
-                                        is_title = True
-                                        
-                                    fonte_escolhida = self.combo_font_title.currentText() if is_title else self.combo_font_body.currentText()
+                                # Identifica quem é título e quem é corpo/card
+                                is_title = (shape.name == "TitleBox_Vega")
+                                if run.font.size:
+                                    if run.font.size >= Pt(24): is_title = True
+                                elif paragraph.font.size and paragraph.font.size >= Pt(24):
+                                    is_title = True
                                     
-                                    if fonte_escolhida != "Padrão do Tema":
-                                        run.font.name = fonte_escolhida
+                                # APLICA A COR SEPARADA (ITEM 3)
+                                cor_rgb = title_rgb if is_title else body_rgb
+                                if cor_rgb:
+                                    run.font.color.rgb = cor_rgb
+                                    
+                                # APLICA A FONTE SEPARADA
+                                fonte_escolhida = self.combo_font_title.currentText() if is_title else self.combo_font_body.currentText()
+                                if fonte_escolhida != "Padrão do Tema":
+                                    run.font.name = fonte_escolhida
                                 
                                 if self.chk_text_scale.isChecked():
                                     percentual = self.slider_text_scale.value()
@@ -1816,10 +1881,37 @@ class AppPaiVega(QMainWindow):
                     msg.setStandardButtons(QMessageBox.Ok)
                     msg.exec()
                 
-                # Apaga o arquivo imediatamente para não mostrar de novo no próximo acesso
-                os.remove(notas_path)
+                # Em vez de apagar, renomeia para o botão "📋 Novidades" poder ler depois!
+                caminho_salvo = os.path.join(base_dir, "novidades_versao.txt")
+                if os.path.exists(caminho_salvo):
+                    os.remove(caminho_salvo)
+                os.rename(notas_path, caminho_salvo)
             except Exception as e:
                 pass # Se der erro de permissão, apenas ignora e segue a vida
+            
+    def abrir_novidades(self):
+        # Procura primeiro se tem um recém-chegado ou o que foi guardado na última atualização
+        caminho_novo = os.path.join(base_dir, "release_notes.txt")
+        caminho_salvo = os.path.join(base_dir, "novidades_versao.txt")
+        
+        alvo = caminho_novo if os.path.exists(caminho_novo) else (caminho_salvo if os.path.exists(caminho_salvo) else None)
+        
+        if not alvo:
+            QMessageBox.information(self, "Sem Novidades", "Não há notas de atualização registradas no momento para esta versão.")
+            return
+
+        try:
+            with open(alvo, "r", encoding="utf-8") as f:
+                texto_notas = f.read().strip()
+                
+            msg = QMessageBox(self)
+            msg.setWindowTitle("📋 Notas de Atualização - SmartSlides Pro")
+            msg.setText("<b>Confira o que mudou na versão atual:</b>\n\n" + texto_notas)
+            msg.setIcon(QMessageBox.Information)
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec()
+        except Exception as e:
+            QMessageBox.warning(self, "Erro", f"Não foi possível ler as notas de atualização:\n{e}")
 
     def export_to_pdf(self):
         # Tenta pegar o último que o usuário editou/salvou. Se não tiver, pega o que ele carregou no passo 1.

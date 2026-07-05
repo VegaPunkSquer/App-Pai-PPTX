@@ -6,25 +6,32 @@ from PySide6.QtWidgets import QMessageBox, QProgressDialog, QApplication
 from PySide6.QtCore import Qt
 import json
 
+if getattr(sys, 'frozen', False):
+    diretorio_raiz = sys._MEIPASS
+else:
+    diretorio_raiz = os.path.dirname(os.path.abspath(__file__))
+
+caminho_manifesto = os.path.join(diretorio_raiz, "vega_manifesto.json")
+
+# AQUI ESTÁ AS VARIÁVEIS GLOBAIS QUE O ABA_SOBRE.PY PRECISA PARA NÃO CRASHAR:
+try:
+    with open(caminho_manifesto, "r", encoding="utf-8") as f:
+        manifesto_data = json.load(f)
+        PRODUTO_ID_NO_MASTER = manifesto_data.get("produto_id_master")
+        NOME_DO_APP = manifesto_data.get("nome", "App VegaTech")
+        VERSAO_LOCAL = manifesto_data.get("versao_atual", "v1.0.0")
+except Exception:
+    PRODUTO_ID_NO_MASTER = None
+    NOME_DO_APP = "App VegaTech"
+    VERSAO_LOCAL = "v1.0.0"
+
+API_MASTER_URL = "https://vegap-masterapp.hf.space"
+
 def checar_e_atualizar(parent_widget=None):
     if not getattr(sys, 'frozen', False):
         return False
 
-    diretorio_raiz = sys._MEIPASS if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
-    caminho_manifesto = os.path.join(diretorio_raiz, "vega_manifesto.json")
-
-    # MÁQUINA DE VERIFICAÇÃO RIGOROSA: Lê o arquivo. Se falhar, aborta tudo.
-    try:
-        with open(caminho_manifesto, "r", encoding="utf-8") as f:
-            manifesto_data = json.load(f)
-            produto_id_master = manifesto_data.get("produto_id_master")
-            nome_do_app = manifesto_data.get("nome")
-            versao_configurada = manifesto_data.get("versao_atual")
-            
-        if not produto_id_master:
-            raise ValueError("ID do produto ausente no manifesto.")
-            
-    except Exception as e:
+    if not PRODUTO_ID_NO_MASTER:
         msg = QMessageBox(parent_widget)
         msg.setWindowTitle("Falha de Integridade")
         msg.setText("Arquivo vega_manifesto.json ausente, corrompido ou inválido.")
@@ -33,19 +40,17 @@ def checar_e_atualizar(parent_widget=None):
         msg.exec()
         return False
 
-    api_master_url = "https://vegap-masterapp.hf.space"
-
     try:
-        resp = requests.get(f"{api_master_url}/master/atualizacao/{produto_id_master}", timeout=5)
+        resp = requests.get(f"{API_MASTER_URL}/master/atualizacao/{PRODUTO_ID_NO_MASTER}", timeout=5)
         if resp.status_code == 200:
             dados = resp.json()
             versao_nuvem = dados.get("versao_atual")
             link_download = dados.get("link_download")
             notas = dados.get("notas_atualizacao", "Sem notas disponíveis.").strip()
             
-            if versao_nuvem and versao_nuvem != versao_configurada and link_download:
+            if versao_nuvem and versao_nuvem != VERSAO_LOCAL and link_download:
                 msg = QMessageBox(parent_widget)
-                msg.setWindowTitle(f"Atualização Disponível: {nome_do_app}")
+                msg.setWindowTitle(f"Atualização Disponível: {NOME_DO_APP}")
                 msg.setText(f"Uma nova versão ({versao_nuvem}) está disponível!\n\nO que há de novo:\n\n{notas}\n\nDeseja baixar e atualizar agora?")
                 msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 
