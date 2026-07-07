@@ -12,6 +12,24 @@ else:
 CONFIG_FILE = os.path.join(base_dir, "config.json")
 
 # ==========================================
+# 📋 LEITURA AUTOMÁTICA DO MANIFESTO (VERSÃO E ID)
+# ==========================================
+MANIFESTO_FILE = os.path.join(base_dir, "vega_manifesto.json")
+VERSAO_ATUAL = "v1.0.0"
+PRODUTO_ID_MASTER = 1 # Usado para bater na sua API
+
+if os.path.exists(MANIFESTO_FILE):
+    try:
+        import json as _json_temp
+        with open(MANIFESTO_FILE, "r", encoding="utf-8") as _f:
+            _dados_manifesto = _json_temp.load(_f)
+            VERSAO_ATUAL = _dados_manifesto.get("versao_atual", "v1.0.0")
+            if "produto_id_master" in _dados_manifesto:
+                PRODUTO_ID_MASTER = _dados_manifesto["produto_id_master"]
+    except Exception:
+        pass
+
+# ==========================================
 # 🚀 O SEGREDO DA VELOCIDADE: SPLASH SCREEN NO TOPO
 # ==========================================
 # Importamos APENAS o essencial visual para a tela abrir instantaneamente
@@ -21,7 +39,7 @@ from PySide6.QtCore import Qt
 
 class SplashScreenVega(QSplashScreen):
     def __init__(self, caminho_img):
-        pixmap = QPixmap(caminho_img).scaled(600, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        pixmap = QPixmap(caminho_img).scaled(650, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         super().__init__(pixmap, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
         
         self.lbl_status = QLabel("Iniciando SmartSlides Pro...", self)
@@ -650,10 +668,10 @@ class ConfigDialog(QDialog):
         
         vbox_vis.addWidget(QLabel("\n🔎 Zoom da Tela (Acessibilidade):"))
         self.slider_zoom = QSlider(Qt.Horizontal)
-        self.slider_zoom.setRange(50, 250)
+        self.slider_zoom.setRange(0, 150)
         self.slider_zoom.setValue(self.config.get("zoom", 100))
         self.lbl_zoom_val = QLabel(f"{self.slider_zoom.value()}%")
-        self.slider_zoom.valueChanged.connect(lambda v: self.lbl_zoom_val.setText(f"{v}%"))
+        self.slider_zoom.valueChanged.connect(self.aplicar_zoom_ao_vivo)
         
         hbox_zoom = QHBoxLayout()
         hbox_zoom.addWidget(self.slider_zoom)
@@ -672,6 +690,12 @@ class ConfigDialog(QDialog):
         layout.addWidget(btn_salvar)
         
         self.update_ia_tab_visibility(self.combo_licenca.currentText())
+        
+    def aplicar_zoom_ao_vivo(self, v):
+        self.lbl_zoom_val.setText(f"{v}%")
+        # Puxa o cordão da janela Pai e aplica o zoom na hora que deslizar!
+        if self.parent() and hasattr(self.parent(), 'apply_zoom'):
+            self.parent().apply_zoom(v)
 
     def update_ia_tab_visibility(self, licensa):
         if licensa == "SAAS (Chave Embutida)":
@@ -803,13 +827,54 @@ class WorkerIAGerador(QThread):
             self.erro_msg = f"Erro no Worker:\n{str(e)}\n\n{traceback.format_exc()}"
         finally:
             self.concluido.emit()
+            
+# --- JANELA COM ROLAGEM PARA NOVIDADES ---
+class NovidadesDialog(QDialog):
+    def __init__(self, versao, texto, zoom_atual=100, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"📋 Novidades - SmartSlides Pro ({versao})")
+        
+        # MÁGICA: A largura se adapta ao zoom para não esmagar o texto gigante!
+        nova_largura = int(650 * (zoom_atual / 100.0))
+        self.setFixedSize(nova_largura, 650) # Altura cravada em 650, largura dinâmica
+        
+        layout = QVBoxLayout(self)
+        
+        lbl_titulo = QLabel(f"<b>O que há de novo na versão {versao}:</b>")
+        lbl_titulo.setStyleSheet("font-size: 16px;")
+        layout.addWidget(lbl_titulo)
+        
+        # Cria a área de rolagem
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # <-- DESTRÓI A BARRA HORIZONTAL
+        scroll.setStyleSheet("QScrollArea { border: 1px solid gray; border-radius: 5px; }")
+        
+        conteudo = QWidget()
+        lay_conteudo = QVBoxLayout(conteudo)
+        
+        lbl_texto = QLabel(texto)
+        lbl_texto.setWordWrap(True)
+        lbl_texto.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        
+        lay_conteudo.addWidget(lbl_texto)
+        lay_conteudo.addStretch() # Empurra o texto para o topo
+        
+        scroll.setWidget(conteudo)
+        layout.addWidget(scroll)
+        
+        btn_ok = QPushButton("Entendi")
+        btn_ok.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 10px;")
+        btn_ok.setCursor(Qt.PointingHandCursor)
+        btn_ok.clicked.connect(self.accept)
+        layout.addWidget(btn_ok)
 
 # --- APLICATIVO PRINCIPAL ---
 class AppPaiVega(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SmartSlides Pro")
-        self.resize(500, 500)
+        self.resize(650, 650)
         
         # --- ÍCONE DA JANELA E BARRA DE TAREFAS ---
         icon_path = os.path.join(bundle_dir, "assets", "SmartSlides.ico") # <-- CORRIGIDO PARA BUNDLE_DIR
@@ -830,9 +895,11 @@ class AppPaiVega(QMainWindow):
         self.text_color_body = None  # <-- COR SEPARADA DO CORPO
         self.fill_color = None
 
-        self.init_ui()
+        # A MÁGICA ACONTECE AQUI: Aplica o zoom e o tema ANTES de desenhar a interface!
+        self.apply_zoom(self.config.get("zoom", 100))
         self.apply_theme()
-        self.apply_zoom(self.config.get("zoom", 100)),
+        
+        self.init_ui() # Agora todos os textos e botões já nascem do tamanho salvo!
         
         # Verifica se o atualizador deixou algum recado de novidades
         self.checar_notas_atualizacao()
@@ -863,8 +930,10 @@ class AppPaiVega(QMainWindow):
         tema = self.config.get("theme", "Escuro")
         app = QApplication.instance()
         app.setStyle("Fusion")
+        
         palette = QPalette()
         if tema == "Escuro":
+            # Cores Clássicas do Tema Escuro
             palette.setColor(QPalette.Window, QColor(53, 53, 53))
             palette.setColor(QPalette.WindowText, Qt.white)
             palette.setColor(QPalette.Base, QColor(25, 25, 25))
@@ -879,6 +948,7 @@ class AppPaiVega(QMainWindow):
             palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
             palette.setColor(QPalette.HighlightedText, Qt.black)
         else:
+            # Tema CLARO - Contraste Absoluto e Legível
             palette.setColor(QPalette.Window, QColor(240, 240, 240))
             palette.setColor(QPalette.WindowText, Qt.black)
             palette.setColor(QPalette.Base, Qt.white)
@@ -889,18 +959,39 @@ class AppPaiVega(QMainWindow):
             palette.setColor(QPalette.Button, QColor(240, 240, 240))
             palette.setColor(QPalette.ButtonText, Qt.black)
             palette.setColor(QPalette.BrightText, Qt.red)
-            palette.setColor(QPalette.Link, QColor(42, 130, 218))
-            palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+            palette.setColor(QPalette.Link, QColor(0, 102, 204))
+            palette.setColor(QPalette.Highlight, QColor(0, 120, 215))
             palette.setColor(QPalette.HighlightedText, Qt.white)
             
         app.setPalette(palette)
+        
+        # Aplica a paleta apenas no TopLevel para não estragar a herança interna dos botões
+        for w in app.topLevelWidgets():
+            w.setPalette(palette)
+            w.update()
 
     def apply_zoom(self, val):
-        base_size = 11 # AUMENTADO PARA CEGUETAS (Padrão era 9)
-        new_size = int(base_size * (val / 100.0))
-        font = self.font()
+        # 1. Fonte: Começa em 11 e aumenta conforme o slider
+        base_size = 11
+        # O slider vai de 0 a 100 (ou mais). 0 = 100% do tamanho, 50 = 150% do tamanho
+        fator = 1.0 + (val / 100.0) 
+        new_size = int(base_size * fator)
+        
+        app = QApplication.instance()
+        font = app.font()
         font.setPointSize(new_size)
+        app.setFont(font)
         self.setFont(font)
+        
+        # 2. Janela: Base de 650px, aumenta conforme o slider
+        nova_largura = int(650 * fator)
+        self.setMinimumWidth(nova_largura)
+        self.resize(nova_largura, self.height())
+        
+        # Garante que qualquer outra janela filha atualize na mesma hora
+        for w in app.topLevelWidgets():
+            w.setFont(font)
+            w.update()
 
     def create_color_indicator(self):
         lbl = QLabel()
@@ -1188,7 +1279,8 @@ class AppPaiVega(QMainWindow):
         from PySide6.QtWidgets import QScrollArea
         
         self.scroll_principal = QScrollArea()
-        self.scroll_principal.setWidgetResizable(True) # Faz o conteúdo expandir na horizontal normalmente
+        self.scroll_principal.setWidgetResizable(True) 
+        self.scroll_principal.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff) # <-- ASSASSINA A BARRA HORIZONTAL
         self.scroll_principal.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
         self.scroll_principal.setWidget(self.main_container)
         
@@ -1867,51 +1959,63 @@ class AppPaiVega(QMainWindow):
                 break
             
     def checar_notas_atualizacao(self):
-        notas_path = os.path.join(base_dir, "release_notes.txt")
-        if os.path.exists(notas_path):
-            try:
-                with open(notas_path, "r", encoding="utf-8") as f:
-                    texto_notas = f.read().strip()
-                
-                if texto_notas:
-                    msg = QMessageBox(self)
-                    msg.setWindowTitle("🚀 Aplicativo Atualizado!")
-                    msg.setText("O SmartSlides Pro foi atualizado com sucesso!\n\nVeja o que há de novo nesta versão:\n\n" + texto_notas)
-                    msg.setIcon(QMessageBox.Information)
-                    msg.setStandardButtons(QMessageBox.Ok)
-                    msg.exec()
-                
-                # Em vez de apagar, renomeia para o botão "📋 Novidades" poder ler depois!
-                caminho_salvo = os.path.join(base_dir, "novidades_versao.txt")
-                if os.path.exists(caminho_salvo):
-                    os.remove(caminho_salvo)
-                os.rename(notas_path, caminho_salvo)
-            except Exception as e:
-                pass # Se der erro de permissão, apenas ignora e segue a vida
-            
-    def abrir_novidades(self):
-        # Procura primeiro se tem um recém-chegado ou o que foi guardado na última atualização
-        caminho_novo = os.path.join(base_dir, "release_notes.txt")
-        caminho_salvo = os.path.join(base_dir, "novidades_versao.txt")
+        # Olha no config.json se ele já viu as novidades DESTA versão compilada
+        ultima_vista = self.config.get("ultima_versao_vista", "")
         
-        alvo = caminho_novo if os.path.exists(caminho_novo) else (caminho_salvo if os.path.exists(caminho_salvo) else None)
-        
-        if not alvo:
-            QMessageBox.information(self, "Sem Novidades", "Não há notas de atualização registradas no momento para esta versão.")
-            return
-
-        try:
-            with open(alvo, "r", encoding="utf-8") as f:
-                texto_notas = f.read().strip()
-                
+        if ultima_vista != VERSAO_ATUAL:
             msg = QMessageBox(self)
-            msg.setWindowTitle("📋 Notas de Atualização - SmartSlides Pro")
-            msg.setText("<b>Confira o que mudou na versão atual:</b>\n\n" + texto_notas)
+            msg.setWindowTitle(f"🚀 Aplicativo Atualizado ({VERSAO_ATUAL})!")
+            msg.setText(f"<b>O SmartSlides Pro foi atualizado para a versão {VERSAO_ATUAL}!</b>\n\nClique no botão '📋 Novidades' no topo da tela para ver todos os detalhes das melhorias baixadas diretamente do servidor.")
             msg.setIcon(QMessageBox.Information)
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
+            
+            # Grava no config.json que ele já leu, pra não abrir o pop-up amanhã de novo
+            self.config["ultima_versao_vista"] = VERSAO_ATUAL
+            self.save_config()
+            
+    def abrir_novidades(self):
+        # BUSCA AO VIVO NO BACKEND DO MASTER
+        self.btn_novidades.setText("⏳ Buscando...")
+        self.btn_novidades.setEnabled(False)
+        QApplication.processEvents()
+        
+        try:
+            url = f"https://vegap-masterapp.hf.space/master/atualizacao/{PRODUTO_ID_MASTER}"
+            resposta = requests.get(url, timeout=5)
+            versao_nuvem = VERSAO_ATUAL
+            if resposta.status_code == 200:
+                dados = resposta.json()
+                notas = dados.get("notas_atualizacao", "").strip()
+                # PEGA A VERSÃO REAL DA API PARA O TÍTULO BATER COM O TEXTO!
+                versao_nuvem = dados.get("versao_atual", VERSAO_ATUAL)
+                if not notas:
+                    notas = "Sem novidades registradas para esta versão no servidor."
+            else:
+                notas = "Não foi possível resgatar as novidades do servidor no momento."
         except Exception as e:
-            QMessageBox.warning(self, "Erro", f"Não foi possível ler as notas de atualização:\n{e}")
+            notas = f"Falha de conexão com a Nave-Mãe:\n{e}"
+        finally:
+            self.btn_novidades.setText("📋 Novidades")
+            self.btn_novidades.setEnabled(True)
+
+        # ========================================================
+        # FORMATADOR INTELIGENTE (Puxa do Banco e Quebra Linhas)
+        # ========================================================
+        notas_formatadas = notas.replace("\\n", "\n") # Desescapa possíveis quebras da API
+        notas_formatadas = notas_formatadas.replace(" • ", "\n• ")
+        
+        # Dá um respiro antes de cada emoji de categoria
+        for emj in ["🎨", "🛡️", "⚡", "🚀", "♿", "💡", "✨", "💳", "🔧", "🔥"]:
+            notas_formatadas = notas_formatadas.replace(f" {emj}", f"\n\n{emj}")
+            
+        # Limpa as quebras de linha excessivas geradas pelo replace
+        notas_formatadas = "\n".join([linha.strip() for linha in notas_formatadas.split("\n") if linha.strip()])
+
+        zoom_atual = self.config.get("zoom", 100)
+        # USA A VERSÃO DA NUVEM PARA A JANELA
+        dialog = NovidadesDialog(versao_nuvem, notas_formatadas, zoom_atual, self)
+        dialog.exec()
 
     def export_to_pdf(self):
         # Tenta pegar o último que o usuário editou/salvou. Se não tiver, pega o que ele carregou no passo 1.
@@ -1946,57 +2050,18 @@ class AppPaiVega(QMainWindow):
             progress.close()
             QMessageBox.critical(self, "Erro no PDF", f"Falha ao converter.\nVerifique se o PowerPoint não está com janelas de diálogo travando o fundo.\n\nDetalhes:\n{str(e)}")
             
-# ==========================================
-# TELA DE CARREGAMENTO (SPLASH SCREEN)
-# ==========================================
-class SplashScreenVega(QSplashScreen):
-    def __init__(self, caminho_img):
-        pixmap = QPixmap(caminho_img).scaled(600, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        super().__init__(pixmap, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
-        
-        # O Rótulo de Status
-        self.lbl_status = QLabel("Iniciando SmartSlides Pro...", self)
-        self.lbl_status.setStyleSheet("color: white; font-weight: bold; font-size: 13px; background-color: rgba(0,0,0,150); padding: 2px; border-radius: 4px;")
-        self.lbl_status.setAlignment(Qt.AlignCenter)
-        self.lbl_status.setGeometry(20, pixmap.height() - 70, pixmap.width() - 40, 25)
-        
-        # A Barra de Progresso
-        self.barra = QProgressBar(self)
-        self.barra.setGeometry(20, pixmap.height() - 40, pixmap.width() - 40, 20)
-        self.barra.setStyleSheet("""
-            QProgressBar {
-                border: 1px solid #555;
-                border-radius: 5px;
-                background-color: #222;
-                text-align: center;
-                color: white;
-                font-weight: bold;
-            }
-            QProgressBar::chunk {
-                background-color: #0078d7;
-                border-radius: 4px;
-            }
-        """)
-
-    def atualizar(self, valor, texto):
-        self.barra.setValue(valor)
-        self.lbl_status.setText(texto)
-        QApplication.processEvents() # Força a tela a desenhar imediatamente
-        import time; time.sleep(0.3) # Dá uma micro pausa pro olho humano conseguir ler o texto
-
 if __name__ == "__main__":
-    splash.atualizar(85, "Verificando radares e atualizações do sistema...")
+    if splash: splash.atualizar(85, "Verificando radares e atualizações do sistema...")
     if checar_e_atualizar():
         os._exit(0)
         
-    splash.atualizar(95, "Preparando interface gráfica e blindagens...")
+    if splash: splash.atualizar(95, "Preparando interface gráfica e blindagens...")
     window = AppPaiVega()
     
-    splash.atualizar(100, "Tudo pronto! Bem-vindo(a) ao palco.")
-    time.sleep(0.5)
-    
-    # Destrói a Splash Screen e revela a janela verdadeira
-    splash.finish(window)
+    if splash:
+        splash.atualizar(100, "Tudo pronto! Bem-vindo(a) ao palco.")
+        time.sleep(0.5)
+        splash.finish(window)
+        
     window.show()
-    
     sys.exit(app.exec())
