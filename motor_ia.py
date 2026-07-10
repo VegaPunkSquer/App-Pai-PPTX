@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import requests
 import traceback
 from datetime import datetime
@@ -34,6 +35,22 @@ registrar_log_supremo("=== MOTOR IA INICIADO ===")
 load_dotenv(env_path)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+
+# --- ENTRA AQUI: TRAVA DE SEGURANÇA E BACKOFF ANTI-SURTO DO GOOGLE ---
+ULTIMA_REQUISICAO = 0.0
+INTERVALO_MINIMO = 3.0  # Tempo mínimo em segundos entre uma requisição e outra (Evita disparos de metralhadora)
+
+def aguardar_rate_limit():
+    """Garante que o app não atire requisições mais rápido do que a API tolera."""
+    global ULTIMA_REQUISICAO
+    tempo_atual = time.time()
+    tempo_passado = tempo_atual - ULTIMA_REQUISICAO
+    if tempo_passado < INTERVALO_MINIMO:
+        tempo_espera = INTERVALO_MINIMO - tempo_passado
+        registrar_log_supremo(f"[TRAVA ANTI-SURTO] Aguardando {tempo_espera:.2f}s para proteger a API...")
+        time.sleep(tempo_espera)
+    ULTIMA_REQUISICAO = time.time()
+# ---------------------------------------------------------------------
 
 def gerar_roteiro_slides(assunto_apresentacao, api_key_usuario=None, modelo_selecionado='gemini-2.5-flash'):
     registrar_log_supremo(f"Iniciando gerar_roteiro_slides. Assunto: '{assunto_apresentacao}', Modelo: {modelo_selecionado}")
@@ -84,10 +101,32 @@ def gerar_roteiro_slides(assunto_apresentacao, api_key_usuario=None, modelo_sele
     
     try:
         registrar_log_supremo("Enviando prompt para a API do Google... (Aguardando resposta)")
-        response = client.models.generate_content(
-            model=modelo_selecionado,
-            contents=prompt
-        )
+        
+        # --- ENTRA AQUI: SISTEMA DE BACKOFF EXPONENCIAL + TRAVA ---
+        tentativas = 0
+        max_tentativas = 3
+        while tentativas < max_tentativas:
+            try:
+                aguardar_rate_limit()  # Aciona nosso amortecedor antes de atirar no Google
+                response = client.models.generate_content(
+                    model=modelo_selecionado,
+                    contents=prompt
+                )
+                break  # Se deu certo, sai do loop imediatamente!
+            except Exception as e_interno:
+                tentativas += 1
+                erro_str_interno = str(e_interno)
+                # Se for erro de cota ou limite (429/Exhausted), espera um tempo exponencial e tenta de novo
+                if "RESOURCE_EXHAUSTED" in erro_str_interno or "429" in erro_str_interno:
+                    tempo_backoff = (2 ** tentativas) * 2  # Espera 4s, depois 8s, depois 16s...
+                    registrar_log_supremo(f"[BACKOFF] API sobrecarregada ou limite de taxa. Tentativa {tentativas}/{max_tentativas}. Aguardando {tempo_backoff}s...", erro=True)
+                    time.sleep(tempo_backoff)
+                else:
+                    raise e_interno  # Se for erro grave de código/chave, repassa o erro para explodir logo
+        else:
+            return False, "O sistema do Google rejeitou múltiplas tentativas seguidas (Rate Limit / Cota excedida). Aguarde um minuto."
+        # -----------------------------------------------------------
+
         registrar_log_supremo("Resposta recebida do Google com sucesso! Processando texto...")
         
         texto = response.text

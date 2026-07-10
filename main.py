@@ -40,7 +40,7 @@ from PySide6.QtCore import Qt
 class SplashScreenVega(QSplashScreen):
     def __init__(self, caminho_img):
         pixmap = QPixmap(caminho_img).scaled(650, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        super().__init__(pixmap, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        super().__init__(pixmap, Qt.FramelessWindowHint) # Removido o WindowStaysOnTopHint que travava a tela
         
         self.lbl_status = QLabel("Iniciando SmartSlides Pro...", self)
         self.lbl_status.setStyleSheet("color: white; font-weight: bold; font-size: 13px; background-color: rgba(0,0,0,150); padding: 2px; border-radius: 4px;")
@@ -290,7 +290,9 @@ class LoginCadastroDialog(QDialog):
         self.btn_logar.clicked.connect(self.fazer_login)
         
         layout_login.addWidget(QLabel("Já tem uma conta? Acesse:"))
+        layout_login.addWidget(QLabel("E-mail:"))
         layout_login.addWidget(self.inp_login_email)
+        layout_login.addWidget(QLabel("Senha:"))
         layout_login.addWidget(self.inp_login_senha)
         layout_login.addWidget(self.btn_logar)
         layout_login.addStretch()
@@ -312,9 +314,13 @@ class LoginCadastroDialog(QDialog):
         self.btn_cadastrar.clicked.connect(self.fazer_cadastro)
         
         layout_cad.addWidget(QLabel("Novo por aqui? Cadastre-se:"))
+        layout_cad.addWidget(QLabel("Nome Completo:"))
         layout_cad.addWidget(self.inp_cad_nome)
+        layout_cad.addWidget(QLabel("E-mail:"))
         layout_cad.addWidget(self.inp_cad_email)
+        layout_cad.addWidget(QLabel("CPF/CNPJ:"))
         layout_cad.addWidget(self.inp_cad_doc)
+        layout_cad.addWidget(QLabel("Senha:"))
         layout_cad.addWidget(self.inp_cad_senha)
         layout_cad.addWidget(self.btn_cadastrar)
         layout_cad.addStretch()
@@ -747,8 +753,8 @@ class ConfigDialog(QDialog):
                 
         # 2. Barreira do SAAS (Autenticação Obrigatória + Checkout na Loja)
         if licenca_escolhida == "SAAS (Chave Embutida)":
-            # SÓ ABRE A LOJA SE O USUÁRIO AINDA NÃO ATIVOU O SAAS DEFINITIVAMENTE!
-            ja_era_saas = (self.config.get("license") == "SAAS (Chave Embutida)") and self.config.get("token_master")
+            # GOLPE VEGATECH: Se a licença já for SAAS, não barra o salvamento de zoom pedindo token!
+            ja_era_saas = (self.config.get("license") == "SAAS (Chave Embutida)")
             
             if not self.config.get("saas_ativo") and not ja_era_saas:
                 if not self.config.get("token_master"):
@@ -965,6 +971,17 @@ class AppPaiVega(QMainWindow):
             
         app.setPalette(palette)
         
+        # Injeta um estilo blindado para que os Checkboxes fiquem sempre desenhados e visíveis
+        estilo_checkbox = """
+            QCheckBox::indicator {
+                width: 16px; height: 16px; border: 2px solid #777; border-radius: 3px; background-color: transparent;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #0078d7; border-color: #0078d7;
+            }
+        """
+        app.setStyleSheet(estilo_checkbox)
+
         # Aplica a paleta apenas no TopLevel para não estragar a herança interna dos botões
         for w in app.topLevelWidgets():
             w.setPalette(palette)
@@ -1041,15 +1058,17 @@ class AppPaiVega(QMainWindow):
         self.txt_tema.setPlaceholderText("Ou digite o tema para a IA criar do zero...")
         self.txt_tema.setMaximumHeight(80) 
         
+        from PySide6.QtWidgets import QSizePolicy
+        
         self.btn_gerar_ia = QPushButton("Criar Apresentação\nAutomática (IA)")
         self.btn_gerar_ia.setStyleSheet("background-color: #2b5c8f; color: white; font-weight: bold; padding: 10px;")
-        self.btn_gerar_ia.setMinimumHeight(80)
+        self.btn_gerar_ia.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding) # Libera o crescimento
         self.btn_gerar_ia.clicked.connect(self.gerar_com_ia)
         
         hbox_ia.addWidget(self.txt_tema)
         self.btn_historico = QPushButton("🕒 Recuperar\nSalvo")
         self.btn_historico.setStyleSheet("background-color: #555; color: white; font-weight: bold; padding: 10px;")
-        self.btn_historico.setMinimumHeight(80)
+        self.btn_historico.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding) # Libera o crescimento
         self.btn_historico.setCursor(Qt.PointingHandCursor)
         self.btn_historico.clicked.connect(self.abrir_historico)
         
@@ -1063,7 +1082,7 @@ class AppPaiVega(QMainWindow):
         self.combo_presets.addItems(["Personalizado (Manual)", "Corporativo Azul", "Dark Mode Clássico", "Minimalista Clean"])
         self.combo_presets.currentIndexChanged.connect(self.aplicar_preset)
         self.combo_presets.setCursor(Qt.PointingHandCursor)
-        self.combo_presets.setStyleSheet("font-size: 13px; padding: 4px;")
+        self.combo_presets.setStyleSheet("padding: 4px;") # Arrancado o font-size fixo!
         
         hbox_preset.addWidget(QLabel("✨ Formatações Prontas (Presets):"))
         hbox_preset.addWidget(self.combo_presets)
@@ -1261,15 +1280,15 @@ class AppPaiVega(QMainWindow):
         self.main_layout.addLayout(hbox_notes)
 
         self.btn_save = QPushButton("6. Processar Apresentação e Salvar")
-        self.btn_save.setMinimumHeight(45)
-        self.btn_save.setStyleSheet("background-color: #333; color: white; font-weight: bold; font-size: 14px;")
+        self.btn_save.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.btn_save.setStyleSheet("background-color: #333; color: white; font-weight: bold; padding: 10px;")
         self.btn_save.clicked.connect(self.process_and_save)
         self.main_layout.addWidget(self.btn_save)
 
         # --- 7. BOTAO CONVERTER PARA PDF ---
         self.btn_pdf = QPushButton("7. Converter o PPTX atual para PDF")
-        self.btn_pdf.setMinimumHeight(35)
-        self.btn_pdf.setStyleSheet("background-color: #a8201a; color: white; font-weight: bold;")
+        self.btn_pdf.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.btn_pdf.setStyleSheet("background-color: #a8201a; color: white; font-weight: bold; padding: 10px;")
         self.btn_pdf.clicked.connect(self.export_to_pdf)
         self.main_layout.addWidget(self.btn_pdf)
 
@@ -1931,47 +1950,67 @@ class AppPaiVega(QMainWindow):
             lbl_texto.setMinimumWidth(350)
             layout.addWidget(lbl_texto)
             
+            hbox_botoes = QHBoxLayout()
+            btn_sair = QPushButton("❌ Sair do Tutorial")
+            btn_sair.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 10px; border-radius: 4px;")
+            btn_sair.setCursor(Qt.PointingHandCursor)
+            btn_sair.clicked.connect(dialog.reject)
+            
             btn_ok = QPushButton("Entendi, Próximo ➔" if titulo != passos[-1][2] else "Concluir Tutorial ✔️")
             btn_ok.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 10px; border-radius: 4px;")
             btn_ok.setCursor(Qt.PointingHandCursor)
             btn_ok.clicked.connect(dialog.accept)
-            layout.addWidget(btn_ok)
+            
+            hbox_botoes.addWidget(btn_sair)
+            hbox_botoes.addWidget(btn_ok)
+            layout.addLayout(hbox_botoes)
             
             dialog.adjustSize()
             
-            # A Engenharia de Posicionamento Físico
+            # A Engenharia de Posicionamento Físico Blindada (Impede que a janela saia da tela)
             if alvo:
-                # Descobre a coordenada X e Y exata do widget alvo na tela
                 pos_alvo = alvo.mapToGlobal(QPoint(0, 0))
+                novo_x, novo_y = pos_alvo.x(), pos_alvo.y()
                 
                 if direcao == "esquerda":
-                    # Coloca o balão à direita do alvo, apontando pra esquerda
-                    dialog.move(pos_alvo.x() + alvo.width() + 15, pos_alvo.y())
+                    novo_x = pos_alvo.x() + alvo.width() + 15
                 elif direcao == "cima":
-                    # Coloca o balão abaixo do alvo, apontando pra cima
-                    dialog.move(pos_alvo.x(), pos_alvo.y() + alvo.height() + 15)
+                    novo_y = pos_alvo.y() + alvo.height() + 15
                 elif direcao == "baixo":
-                    # Coloca o balão acima do alvo, apontando pra baixo
-                    dialog.move(pos_alvo.x(), pos_alvo.y() - dialog.height() - 15)
+                    novo_y = pos_alvo.y() - dialog.height() - 15
+                    
+                # Trava a janela dentro dos limites reais do seu monitor
+                screen_geom = QApplication.primaryScreen().availableGeometry()
+                novo_x = max(screen_geom.left(), min(novo_x, screen_geom.right() - dialog.width()))
+                novo_y = max(screen_geom.top(), min(novo_y, screen_geom.bottom() - dialog.height()))
+                
+                dialog.move(novo_x, novo_y)
             
             # Se o usuário apertar a tecla ESC do teclado, aborta o tutorial
             if dialog.exec() == QDialog.Rejected:
                 break
             
     def checar_notas_atualizacao(self):
-        # Olha no config.json se ele já viu as novidades DESTA versão compilada
+        # Olha no config.json se ele já viu as novidades
         ultima_vista = self.config.get("ultima_versao_vista", "")
         
-        if ultima_vista != VERSAO_ATUAL:
+        try:
+            # Puxa a versão correta do servidor em vez do manifesto local desatualizado
+            url = f"https://vegap-masterapp.hf.space/master/atualizacao/{PRODUTO_ID_MASTER}"
+            resposta = requests.get(url, timeout=3)
+            versao_real = resposta.json().get("versao_atual", VERSAO_ATUAL) if resposta.status_code == 200 else VERSAO_ATUAL
+        except:
+            versao_real = VERSAO_ATUAL
+            
+        if ultima_vista != versao_real:
             msg = QMessageBox(self)
-            msg.setWindowTitle(f"🚀 Aplicativo Atualizado ({VERSAO_ATUAL})!")
-            msg.setText(f"<b>O SmartSlides Pro foi atualizado para a versão {VERSAO_ATUAL}!</b>\n\nClique no botão '📋 Novidades' no topo da tela para ver todos os detalhes das melhorias baixadas diretamente do servidor.")
+            msg.setWindowTitle(f"🚀 Aplicativo Atualizado ({versao_real})!")
+            msg.setText(f"<b>O SmartSlides Pro foi atualizado para a versão {versao_real}!</b>\n\nClique no botão '📋 Novidades' no topo da tela para ver todos os detalhes das melhorias baixadas diretamente do servidor.")
             msg.setIcon(QMessageBox.Information)
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
             
-            # Grava no config.json que ele já leu, pra não abrir o pop-up amanhã de novo
-            self.config["ultima_versao_vista"] = VERSAO_ATUAL
+            self.config["ultima_versao_vista"] = versao_real
             self.save_config()
             
     def abrir_novidades(self):
