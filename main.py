@@ -1,7 +1,7 @@
 import sys
 import os
 
-# --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
+# --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS E PASTA DE SISTEMA ---
 if getattr(sys, 'frozen', False):
     base_dir = os.path.dirname(sys.executable)
     bundle_dir = sys._MEIPASS
@@ -9,7 +9,21 @@ else:
     base_dir = os.path.dirname(os.path.abspath(__file__))
     bundle_dir = base_dir
 
-CONFIG_FILE = os.path.join(base_dir, "config.json")
+# O GOLPE DO APPDATA: Cria uma pasta invisível no sistema para configs e históricos.
+# Assim o .exe pode ficar em qualquer lugar sem dar erro de permissão no Windows.
+if os.name == 'nt':
+    user_data_dir = os.path.join(os.getenv('APPDATA'), "VegaTech", "SmartSlidesPro")
+else:
+    user_data_dir = os.path.join(os.path.expanduser("~"), ".vegatech", "smartslidespro")
+
+os.makedirs(user_data_dir, exist_ok=True) # Cria a pasta automaticamente e silenciosamente
+
+# Todas as gravações do app agora vão para a pasta segura
+CONFIG_FILE = os.path.join(user_data_dir, "config.json")
+HISTORICO_JSON_FILE = os.path.join(user_data_dir, "historico_roteiros.json")
+PASTA_HISTORICO_PPTX = os.path.join(user_data_dir, "historico_geracoes")
+LOG_FILE = os.path.join(user_data_dir, "erro_ia_log.txt")
+TEMP_PPTX_FILE = os.path.join(user_data_dir, "apresentacao_ia_temp.pptx")
 
 # ==========================================
 # 📋 LEITURA AUTOMÁTICA DO MANIFESTO (VERSÃO E ID)
@@ -103,16 +117,6 @@ import webbrowser
 import ctypes
 import comtypes.client
 from atualizador import checar_e_atualizar
-
-# --- RESOLUÇÃO DE CAMINHOS ABSOLUTOS ---
-if getattr(sys, 'frozen', False):
-    base_dir = os.path.dirname(sys.executable) # Onde o .exe está (para configs e saves)
-    bundle_dir = sys._MEIPASS # Onde o PyInstaller extrai os assets embutidos
-else:
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    bundle_dir = base_dir
-
-CONFIG_FILE = os.path.join(base_dir, "config.json")
 
 # --- JANELA DE ESCOLHA DE IMAGENS ---
 class ImageSelectionDialog(QDialog):
@@ -1694,30 +1698,28 @@ class AppPaiVega(QMainWindow):
                         text_frame = notes_slide.notes_text_frame
                         text_frame.text = f"📢 ROTEIRO DO APRESENTADOR:\n\n{notas_palestrante}"
 
-            temp_path = os.path.join(base_dir, "apresentacao_ia_temp.pptx")
+            temp_path = TEMP_PPTX_FILE
             prs.save(temp_path)
             
-            # --- SALVANDO O PPTX FÍSICO NO HISTÓRICO (ITEM 3) ---
+            # --- SALVANDO O PPTX FÍSICO NO HISTÓRICO ---
             try:
                 import shutil
                 from datetime import datetime
-                pasta_hist = os.path.join(base_dir, "historico_geracoes")
-                if not os.path.exists(pasta_hist):
-                    os.makedirs(pasta_hist)
+                if not os.path.exists(PASTA_HISTORICO_PPTX):
+                    os.makedirs(PASTA_HISTORICO_PPTX)
                 
                 # Cria um nome limpo e seguro pro arquivo
                 tema_limpo = "".join([c for c in tema if c.isalpha() or c.isdigit() or c==' ']).rstrip()[:30]
                 data_str = datetime.now().strftime("%Y%m%d_%H%M%S")
                 nome_arq = f"{data_str}_{tema_limpo.replace(' ', '_')}.pptx"
-                caminho_salvo = os.path.join(pasta_hist, nome_arq)
+                caminho_salvo = os.path.join(PASTA_HISTORICO_PPTX, nome_arq)
                 
                 shutil.copy2(temp_path, caminho_salvo)
                 
-                # Salva a referência no JSON
-                hist_json = os.path.join(base_dir, "historico_roteiros.json")
+                # Salva a referência no JSON blindado
                 historico = []
-                if os.path.exists(hist_json):
-                    with open(hist_json, "r", encoding="utf-8") as f:
+                if os.path.exists(HISTORICO_JSON_FILE):
+                    with open(HISTORICO_JSON_FILE, "r", encoding="utf-8") as f:
                         historico = json.load(f)
                         
                 historico.append({
@@ -1726,10 +1728,10 @@ class AppPaiVega(QMainWindow):
                     "caminho": caminho_salvo
                 })
                 
-                if len(historico) > 10: # Guarda as últimas 10 gerações inteiras
+                if len(historico) > 10: 
                     historico = historico[-10:]
                     
-                with open(hist_json, "w", encoding="utf-8") as f:
+                with open(HISTORICO_JSON_FILE, "w", encoding="utf-8") as f:
                     json.dump(historico, f, indent=4, ensure_ascii=False)
             except Exception as e:
                 print(f"Erro no backup do PPTX: {e}")
@@ -1751,21 +1753,19 @@ class AppPaiVega(QMainWindow):
         except Exception as e:
             progress.close()
             erro_msg = traceback.format_exc()
-            log_path = os.path.join(base_dir, "erro_ia_log.txt")
             
-            with open(log_path, "w", encoding="utf-8") as f:
+            with open(LOG_FILE, "w", encoding="utf-8") as f:
                 f.write(f"ERRO CRÍTICO NA IA:\n{erro_msg}")
             
-            QMessageBox.critical(self, "Falha Fatal", f"O aplicativo encontrou um erro e gerou um log.\n\nSalvo em:\n{log_path}\n\nErro: {str(e)}")
+            QMessageBox.critical(self, "Falha Fatal", f"O aplicativo encontrou um erro e gerou um log.\n\nSalvo em:\n{LOG_FILE}\n\nErro: {str(e)}")
             
     def abrir_historico(self):
-        hist_path = os.path.join(base_dir, "historico_roteiros.json")
-        if not os.path.exists(hist_path):
+        if not os.path.exists(HISTORICO_JSON_FILE):
             QMessageBox.information(self, "Histórico Vazio", "Você ainda não tem apresentações salvas localmente.")
             return
 
         try:
-            with open(hist_path, "r", encoding="utf-8") as f:
+            with open(HISTORICO_JSON_FILE, "r", encoding="utf-8") as f:
                 historico = json.load(f)
         except:
             historico = []
