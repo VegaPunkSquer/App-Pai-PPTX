@@ -1,6 +1,6 @@
 {
     "nome": "SmartSlides Pro",
-    "versao_atual": "v1.5.2",
+    "versao_atual": "v1.5.8",
     "repo": "https://github.com/VegaPunkSquer/App-Pai-PPTX",
     "builds": {
         "desktop": "exe.bat"
@@ -35,6 +35,30 @@
             "tipo": "unico",
             "valor": 59.9,
             "trial_dias": 0
+        },
+        "ELITE_MENSAL": {
+            "tipo": "assinatura",
+            "valor": 79.9,
+            "trial_dias": 0,
+            "ciclo": "mensal"
+        },
+        "ELITE_TRIMESTRAL": {
+            "tipo": "assinatura",
+            "valor": 69.9,
+            "trial_dias": 0,
+            "ciclo": "trimestral"
+        },
+        "ELITE_SEMESTRAL": {
+            "tipo": "assinatura",
+            "valor": 59.9,
+            "trial_dias": 0,
+            "ciclo": "semestral"
+        },
+        "ELITE_ANUAL": {
+            "tipo": "assinatura",
+            "valor": 49.9,
+            "trial_dias": 0,
+            "ciclo": "anual"
         }
     },
     "package_name": "",

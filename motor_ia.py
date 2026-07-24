@@ -4,6 +4,7 @@ import json
 import time
 import requests
 import traceback
+import re  # <--- ADICIONADO AQUI
 from datetime import datetime
 from google import genai
 from dotenv import load_dotenv
@@ -35,6 +36,8 @@ registrar_log_supremo("=== MOTOR IA INICIADO ===")
 load_dotenv(env_path)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PEXELS_API_KEY = os.getenv("PEXELS_API_KEY")
+CF_ACCOUNT_ID = os.getenv("CF_ACCOUNT_ID")  # A sua chave embutida SAAS
+CF_API_TOKEN = os.getenv("CF_API_TOKEN")    # A sua chave embutida SAAS
 
 # --- ENTRA AQUI: TRAVA DE SEGURANÇA E BACKOFF ANTI-SURTO DO GOOGLE ---
 ULTIMA_REQUISICAO = 0.0
@@ -52,22 +55,10 @@ def aguardar_rate_limit():
     ULTIMA_REQUISICAO = time.time()
 # ---------------------------------------------------------------------
 
-def gerar_roteiro_slides(assunto_apresentacao, api_key_usuario=None, modelo_selecionado='gemini-2.5-flash'):
-    registrar_log_supremo(f"Iniciando gerar_roteiro_slides. Assunto: '{assunto_apresentacao}', Modelo: {modelo_selecionado}")
-    
-    chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY
-    
-    if not chave_final:
-        registrar_log_supremo("Execução parada: Chave de API não configurada.", erro=True)
-        return False, "ERRO: Chave de API não configurada. Ative sua licença ou insira sua chave (BYOK)."
+def gerar_roteiro_slides(assunto_apresentacao, config_ia):
+    provedor = config_ia.get("provedor", "gemini")
+    registrar_log_supremo(f"Roteador IA ativado. Provedor: {provedor.upper()}")
 
-    try:
-        registrar_log_supremo("Inicializando cliente do Gemini genai.Client...")
-        client = genai.Client(api_key=chave_final)
-    except Exception as e:
-        registrar_log_supremo(f"Falha ao criar o cliente da API: {traceback.format_exc()}", erro=True)
-        return False, f"Erro ao inicializar o cliente do Gemini:\n{str(e)}"
-    
     prompt = f"""
     Atue como um designer de apresentações corporativas nível sênior (estilo Gamma/Canva). 
     Crie uma estrutura de apresentação espetacular baseada no assunto: "{assunto_apresentacao}".
@@ -98,60 +89,100 @@ def gerar_roteiro_slides(assunto_apresentacao, api_key_usuario=None, modelo_sele
         }}
     ]
     """
+
+    if provedor == "cloudflare":
+        return _gerar_cloudflare(prompt, config_ia)
+    else:
+        return _gerar_gemini(prompt, config_ia)
+
+def _gerar_gemini(prompt, config_ia):
+    api_key_usuario = config_ia.get("api_key")
+    modelo_selecionado = config_ia.get("model", "gemini-2.5-flash")
+    
+    chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY
+    if not chave_final:
+        registrar_log_supremo("Execução parada: Chave de API não configurada.", erro=True)
+        return False, "ERRO: Chave de API não configurada."
+
+    try:
+        client = genai.Client(api_key=chave_final)
+    except Exception as e:
+        registrar_log_supremo(f"Falha ao criar o cliente da API: {traceback.format_exc()}", erro=True)
+        return False, f"Erro ao inicializar cliente do Gemini:\n{str(e)}"
     
     try:
-        registrar_log_supremo("Enviando prompt para a API do Google... (Aguardando resposta)")
-        
-        # --- ENTRA AQUI: SISTEMA DE BACKOFF EXPONENCIAL + TRAVA ---
         tentativas = 0
         max_tentativas = 3
         while tentativas < max_tentativas:
             try:
-                aguardar_rate_limit()  # Aciona nosso amortecedor antes de atirar no Google
-                response = client.models.generate_content(
-                    model=modelo_selecionado,
-                    contents=prompt
-                )
-                break  # Se deu certo, sai do loop imediatamente!
+                aguardar_rate_limit()
+                response = client.models.generate_content(model=modelo_selecionado, contents=prompt)
+                break 
             except Exception as e_interno:
                 tentativas += 1
                 erro_str_interno = str(e_interno)
-                # Se for erro de cota ou limite (429/Exhausted), espera um tempo exponencial e tenta de novo
                 if "RESOURCE_EXHAUSTED" in erro_str_interno or "429" in erro_str_interno:
-                    tempo_backoff = (2 ** tentativas) * 2  # Espera 4s, depois 8s, depois 16s...
-                    registrar_log_supremo(f"[BACKOFF] API sobrecarregada ou limite de taxa. Tentativa {tentativas}/{max_tentativas}. Aguardando {tempo_backoff}s...", erro=True)
+                    tempo_backoff = (2 ** tentativas) * 2 
+                    registrar_log_supremo(f"[BACKOFF] Tentativa {tentativas}/{max_tentativas}. Aguardando {tempo_backoff}s...", erro=True)
                     time.sleep(tempo_backoff)
                 else:
-                    raise e_interno  # Se for erro grave de código/chave, repassa o erro para explodir logo
+                    raise e_interno
         else:
-            return False, "O sistema do Google rejeitou múltiplas tentativas seguidas (Rate Limit / Cota excedida). Aguarde um minuto."
-        # -----------------------------------------------------------
+            return False, "Rate Limit ou Cota excedida no Google. Aguarde um minuto."
 
-        registrar_log_supremo("Resposta recebida do Google com sucesso! Processando texto...")
-        
-        texto = response.text
-        inicio = texto.find('[')
-        fim = texto.rfind(']') + 1
-        
-        if inicio != -1 and fim != 0:
-            registrar_log_supremo("JSON encontrado e validado com sucesso. Retornando dados.")
-            return True, json.loads(texto[inicio:fim])
-        else:
-            registrar_log_supremo(f"IA respondeu, mas não encontrei um array JSON. Texto puro: {texto}", erro=True)
-            return False, f"Formato inválido retornado pela IA. Resposta: {texto}"
+        json_puro = extrair_json_puro(response.text)
+        if isinstance(json_puro, tuple):
+            registrar_log_supremo(f"Gemini não retornou JSON. Falha: {json_puro[1]}", erro=True)
+            return False, f"Formato inválido retornado pela IA."
+            
+        registrar_log_supremo("JSON (Gemini) validado com sucesso.")
+        return True, json_puro
             
     except Exception as e:
-        erro_str = str(e)
-        registrar_log_supremo(f"Explosão ao tentar comunicar com a API: {traceback.format_exc()}", erro=True)
-        
-        if "RESOURCE_EXHAUSTED" in erro_str:
-            return False, (
-                "Atenção: A cota desta chave foi atingida.\n\n"
-                "1. Verifique seu projeto no Google AI Studio/Cloud.\n"
-                "2. Confirme se a conta de faturamento está ativa no novo projeto.\n"
-                "3. Se o erro persistir, gere uma nova chave no projeto de produção."
-            )
-        return False, f"Erro inesperado na IA: {erro_str}"
+        registrar_log_supremo(f"Explosão na API Gemini: {traceback.format_exc()}", erro=True)
+        if "RESOURCE_EXHAUSTED" in str(e):
+            return False, "Atenção: A cota desta chave foi atingida."
+        return False, f"Erro inesperado na IA: {str(e)}"
+
+def _gerar_cloudflare(prompt, config_ia):
+    # Se ele digitou algo (BYOK), usa. Se estiver vazio (SAAS), usa as globais do seu .env
+    account_id = config_ia.get("cf_account_id", "").strip() or CF_ACCOUNT_ID
+    token = config_ia.get("cf_api_token", "").strip() or CF_API_TOKEN
+    modelo = config_ia.get("cf_model", "@cf/meta/llama-3-8b-instruct")
+
+    if not account_id or not token:
+        registrar_log_supremo("Cloudflare: Chaves ausentes.", erro=True)
+        return False, "Account ID ou API Token da Cloudflare não configurados."
+
+    url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{modelo}"
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    payload = {
+        "messages": [
+            {"role": "system", "content": "Você é um assistente que responde APENAS com JSON. Nenhuma explicação adicional."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+
+    try:
+        registrar_log_supremo(f"Atirando contra API da Cloudflare ({modelo})...")
+        resp = requests.post(url, headers=headers, json=payload, timeout=45)
+        if resp.status_code == 200:
+            resultado = resp.json()
+            texto_ia = resultado.get("result", {}).get("response", "")
+            
+            json_limpo = extrair_json_puro(texto_ia)
+            if isinstance(json_limpo, tuple):
+                registrar_log_supremo(f"Cloudflare tagarelou e quebrou o JSON: {json_limpo[1]}", erro=True)
+                return False, json_limpo[1]
+                
+            registrar_log_supremo("JSON (Cloudflare) validado com sucesso.")
+            return True, json_limpo
+        else:
+            registrar_log_supremo(f"Erro HTTP {resp.status_code}: {resp.text}", erro=True)
+            return False, f"Erro na Cloudflare ({resp.status_code})"
+    except Exception as e:
+        registrar_log_supremo(f"Falha ao conectar na Cloudflare: {e}", erro=True)
+        return False, f"Falha de conexão com a Cloudflare: {str(e)}"
 
 def baixar_imagem_pexels(palavra_chave, indice_slide):
     registrar_log_supremo(f"Iniciando download de imagem Pexels. Palavra: '{palavra_chave}'")
@@ -186,18 +217,93 @@ def baixar_imagem_pexels(palavra_chave, indice_slide):
     
     return caminhos_imagens
 
-def listar_modelos(api_key_usuario=None):
-    registrar_log_supremo("Buscando lista de modelos disponíveis...")
+# ==========================================
+# 🛡️ BLINDAGEM ANTI-TAGARELICE (REGEX SHIELD)
+# ==========================================
+def extrair_json_puro(texto_resposta):
+    texto = texto_resposta.strip()
+    match_lista = re.search(r'\[.*\]', texto, re.DOTALL)
+    if match_lista:
+        try: return json.loads(match_lista.group(0))
+        except: pass
+            
+    match_dic = re.search(r'\{.*\}', texto, re.DOTALL)
+    if match_dic:
+        try: return json.loads(match_dic.group(0))
+        except: pass
+            
+    try:
+        return json.loads(texto)
+    except Exception as e:
+        return None, f"Falha ao decodificar JSON. Resposta bruta:\n{texto[:300]}...\nErro: {e}"
+
+# ==========================================
+# 🔄 BUSCADORES DINÂMICOS
+# ==========================================
+def listar_modelos_gemini(api_key_usuario=None):
+    registrar_log_supremo("Buscando lista de modelos Gemini...")
     chave_final = api_key_usuario if api_key_usuario else GEMINI_API_KEY
-    if not chave_final: return ["gemini-2.5-flash"]
+    
+    if not chave_final: 
+        return [], "Chave de API não encontrada (Variável vazia)."
+        
     try:
         client = genai.Client(api_key=chave_final)
-        modelos = [m.name.replace('models/', '') for m in client.models.list() if 'generateContent' in m.supported_generation_methods]
-        registrar_log_supremo(f"Modelos encontrados: {modelos}")
-        return modelos if modelos else ["gemini-2.5-flash"]
+        modelos = []
+        
+        for m in client.models.list():
+            nome = m.name.replace('models/', '')
+            # Filtro direto e limpo: pega os "gemini" e descarta os geradores de vetores
+            if 'gemini' in nome.lower() and 'embed' not in nome.lower():
+                modelos.append(nome)
+                
+        # Ordena alfabeticamente e inverte (pra jogar as versões mais novas pro topo)
+        modelos.sort(reverse=True)
+        return modelos, "OK"
+        
     except Exception as e:
-        registrar_log_supremo(f"Erro ao listar modelos: {e}", erro=True)
-        return ["gemini-2.5-flash", "gemini-2.5-pro"]
+        registrar_log_supremo(f"Erro ao listar Gemini: {e}", erro=True)
+        return [], str(e)
+
+def listar_modelos_cloudflare(account_id, api_token):
+    registrar_log_supremo("Buscando lista de modelos na Cloudflare via /ai/models/search...")
+    
+    chave_acc = account_id if account_id else CF_ACCOUNT_ID
+    chave_tok = api_token if api_token else CF_API_TOKEN
+    
+    if not chave_acc or not chave_tok:
+        registrar_log_supremo("Sem credenciais da Cloudflare configuradas.", erro=True)
+        return [], "Account ID ou API Token da Cloudflare não configurados."
+        
+    # Rota corrigida exatamente conforme a documentação oficial da Cloudflare
+    url = f"https://api.cloudflare.com/client/v4/accounts/{chave_acc}/ai/models/search"
+    headers = {"Authorization": f"Bearer {chave_tok}"}
+    
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        if resp.status_code == 200:
+            dados = resp.json()
+            modelos_texto = []
+            
+            for modelo in dados.get("result", []):
+                tarefa = modelo.get("task", {}).get("name", "")
+                if tarefa == "Text Generation":
+                    nome_modelo = modelo.get("name")
+                    if nome_modelo:
+                        modelos_texto.append(nome_modelo)
+            
+            modelos_texto.sort()
+            registrar_log_supremo(f"Encontrados {len(modelos_texto)} modelos de texto na Cloudflare.")
+            return modelos_texto, "OK"
+        else:
+            erro_msg = f"Erro HTTP {resp.status_code}: {resp.text}"
+            registrar_log_supremo(erro_msg, erro=True)
+            return [], erro_msg
+            
+    except Exception as e:
+        erro_msg = str(e)
+        registrar_log_supremo(f"Falha de conexão com a Cloudflare: {erro_msg}", erro=True)
+        return [], erro_msg
 
 def testar_conectividade(api_key_usuario=None):
     registrar_log_supremo("Executando teste RÁPIDO de conectividade...")

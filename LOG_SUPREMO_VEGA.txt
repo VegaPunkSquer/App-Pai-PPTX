@@ -164,3 +164,46 @@
 2026-07-07 10:31:56 [INFO] -> === MOTOR IA INICIADO ===
 2026-07-07 12:31:53 [INFO] -> === MOTOR IA INICIADO ===
 2026-07-07 20:50:15 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-20 12:23:34 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-20 12:38:56 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-20 12:46:04 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-20 13:00:25 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 06:05:27 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 06:05:52 [INFO] -> Buscando lista de modelos Gemini...
+2026-07-22 06:05:54 [ERRO FATAL] -> Erro ao listar Gemini: 'Model' object has no attribute 'supported_generation_methods'
+2026-07-22 06:32:39 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:04:01 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:10:44 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:16:31 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:23:03 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:24:13 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:24:24 [INFO] -> Buscando lista de modelos Gemini...
+2026-07-22 07:24:25 [ERRO FATAL] -> Erro ao listar Gemini: 'Model' object has no attribute 'supported_generation_methods'
+2026-07-22 07:35:31 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:35:55 [INFO] -> Buscando lista de modelos Gemini...
+2026-07-22 07:35:56 [ERRO FATAL] -> Erro ao listar Gemini: 'Model' object has no attribute 'supported_generation_methods'
+2026-07-22 07:40:45 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:40:54 [INFO] -> Buscando lista de modelos Gemini...
+2026-07-22 07:45:20 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:45:34 [INFO] -> Buscando lista de modelos Gemini...
+2026-07-22 07:46:19 [INFO] -> Buscando lista de modelos na Cloudflare em tempo real...
+2026-07-22 07:46:20 [ERRO FATAL] -> Erro ao buscar modelos CF (404): {"success":false,"errors":[{"code":10001,"message":"Unable to authenticate request"}],"messages":[],"result":null}
+
+2026-07-22 07:46:23 [INFO] -> Buscando lista de modelos na Cloudflare em tempo real...
+2026-07-22 07:46:23 [ERRO FATAL] -> Erro ao buscar modelos CF (404): {"success":false,"errors":[{"code":10001,"message":"Unable to authenticate request"}],"messages":[],"result":null}
+
+2026-07-22 07:49:08 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:49:54 [INFO] -> Buscando lista de modelos na Cloudflare em tempo real...
+2026-07-22 07:49:54 [ERRO FATAL] -> Erro HTTP 404: {"success":false,"errors":[{"code":10001,"message":"Unable to authenticate request"}],"messages":[],"result":null}
+
+2026-07-22 07:57:55 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 07:58:28 [INFO] -> Buscando lista de modelos na Cloudflare via /ai/models/search...
+2026-07-22 07:58:28 [INFO] -> Encontrados 26 modelos de texto na Cloudflare.
+2026-07-22 07:58:36 [INFO] -> Buscando lista de modelos na Cloudflare via /ai/models/search...
+2026-07-22 07:58:36 [INFO] -> Encontrados 26 modelos de texto na Cloudflare.
+2026-07-22 07:59:19 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 08:04:16 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 08:04:48 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 08:05:15 [INFO] -> === MOTOR IA INICIADO ===
+2026-07-22 08:05:22 [INFO] -> Buscando lista de modelos na Cloudflare via /ai/models/search...
+2026-07-22 08:05:22 [INFO] -> Encontrados 26 modelos de texto na Cloudflare.

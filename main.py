@@ -26,6 +26,29 @@ LOG_FILE = os.path.join(user_data_dir, "erro_ia_log.txt")
 TEMP_PPTX_FILE = os.path.join(user_data_dir, "apresentacao_ia_temp.pptx")
 
 # ==========================================
+# 🚚 MIGRAÇÃO AUTOMÁTICA DE ARQUIVOS ANTIGOS
+# ==========================================
+import shutil
+
+# 1. Migra as Configurações
+old_config = os.path.join(base_dir, "config.json")
+if os.path.exists(old_config) and not os.path.exists(CONFIG_FILE):
+    try: shutil.copy2(old_config, CONFIG_FILE)
+    except: pass
+
+# 2. Migra a Lista de Histórico
+old_hist_json = os.path.join(base_dir, "historico_roteiros.json")
+if os.path.exists(old_hist_json) and not os.path.exists(HISTORICO_JSON_FILE):
+    try: shutil.copy2(old_hist_json, HISTORICO_JSON_FILE)
+    except: pass
+    
+# 3. Migra as Apresentações Físicas Salvas
+old_hist_folder = os.path.join(base_dir, "historico_geracoes")
+if os.path.exists(old_hist_folder) and not os.path.exists(PASTA_HISTORICO_PPTX):
+    try: shutil.copytree(old_hist_folder, PASTA_HISTORICO_PPTX)
+    except: pass
+
+# ==========================================
 # 📋 LEITURA AUTOMÁTICA DO MANIFESTO (VERSÃO E ID)
 # ==========================================
 MANIFESTO_FILE = os.path.join(base_dir, "vega_manifesto.json")
@@ -273,7 +296,9 @@ class LoginCadastroDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Conta VegaTech")
-        self.setFixedSize(350, 400)
+        # Removemos o setFixedSize. Agora ela tem um tamanho mínimo confortável e pode esticar!
+        self.setMinimumSize(400, 550)
+        self.resize(400, 600)
         self.token_recebido = None
         self.init_ui()
 
@@ -443,13 +468,16 @@ class WorkerStatusPagamento(QThread):
         self.rodando = False
 
 class LojaDialog(QDialog):
-    def __init__(self, token_cliente, parent=None):
+    def __init__(self, token_cliente, filtro_loja="SAAS", parent=None):
         super().__init__(parent)
         self.setWindowTitle("🛒 Loja VegaTech - SmartSlides Pro")
         self.setFixedSize(450, 500)
         self.token_cliente = token_cliente
+        self.filtro_loja = filtro_loja # "SAAS" ou "BYOK"
         self.produto_id = None
         self.worker_status = None
+        self.plano_em_andamento = None
+        self.plano_comprado = None # Guarda o recibo final
         self.init_ui()
         self.carregar_vitrine()
 
@@ -517,6 +545,16 @@ class LojaDialog(QDialog):
         )
         
         for nome_plano, detalhes in planos_ordenados:
+            # GOLPE VEGATECH: Filtro Absoluto! 
+            if self.filtro_loja == "BYOK" and "BYOK" not in nome_plano.upper():
+                continue
+            # Se pediu SAAS genérico, não mostra o BYOK
+            if self.filtro_loja == "SAAS" and "BYOK" in nome_plano.upper():
+                continue
+            # A VITRINE VIP: Se pediu ELITE, esconde tudo que não tiver ELITE no nome
+            if self.filtro_loja == "ELITE" and "ELITE" not in nome_plano.upper():
+                continue
+                
             valor = float(detalhes.get("valor", 0.0))
             trial_dias = int(detalhes.get("trial_dias", 0))
             ciclo = detalhes.get("ciclo", "unico").capitalize()
@@ -573,6 +611,7 @@ class LojaDialog(QDialog):
         self.lbl_status.setText("A gerar ambiente seguro de pagamento...")
         self.setEnabled(False)
         
+        self.plano_em_andamento = plano_nome # Anota qual botão ele clicou
         self.worker_checkout = WorkerCheckout(self.token_cliente, self.produto_id, plano_nome, cupom)
         self.worker_checkout.sucesso.connect(self.processar_checkout)
         self.worker_checkout.erro.connect(self.erro_checkout)
@@ -580,6 +619,7 @@ class LojaDialog(QDialog):
 
     def processar_checkout(self, dados):
         if dados.get("gratuito"):
+            self.plano_comprado = self.plano_em_andamento # Grava o recibo!
             QMessageBox.information(self, "Sucesso", dados.get("mensagem", "Acesso VIP liberado com sucesso!"))
             self.accept()
             return
@@ -602,6 +642,7 @@ class LojaDialog(QDialog):
         QMessageBox.critical(self, "Erro", erro)
 
     def pagamento_confirmado(self):
+        self.plano_comprado = self.plano_em_andamento # Grava o recibo!
         QMessageBox.information(self, "Sucesso", "Pagamento confirmado! Acesso Liberado!")
         self.accept()
 
@@ -627,10 +668,28 @@ class ConfigDialog(QDialog):
         self.tab_licenca = QWidget()
         vbox_lic = QVBoxLayout(self.tab_licenca)
         
-        vbox_lic.addWidget(QLabel("<b>Status da Licença atual:</b> (Simulação)"))
+        # O TÍTULO EXPLÍCITO DA ABA
+        lbl_explicacao_licenca = QLabel(
+            "<b>💳 GESTÃO DE PLANOS E ASSINATURAS</b><br><br>"
+            "Selecione a licença desejada abaixo para liberar a geração de apresentações. "
+            "O plano <b>SAAS ELITE</b> desbloqueia a Inteligência Artificial da Cloudflare, "
+            "enquanto o <b>SAAS Padrão</b> usa o Google Gemini.<br><br>"
+            "<i>(Escolha o plano e clique em Salvar para abrir a loja)</i>"
+        )
+        lbl_explicacao_licenca.setWordWrap(True)
+        # ARRANQUEI A COR E A FONTE CHUMBADAS! Agora ele respeita o seu Zoom e o seu Tema.
+        lbl_explicacao_licenca.setStyleSheet("margin-bottom: 10px;") 
+        vbox_lic.addWidget(lbl_explicacao_licenca)
+        
+        vbox_lic.addWidget(QLabel("<b>Status da Licença atual:</b>"))
         self.combo_licenca = QComboBox()
+        # DE VOLTA AS 3 OPÇÕES LIMPAS E DIRETAS:
         self.combo_licenca.addItems(["FREE (Edição Manual)", "BYOK (Sua Chave)", "SAAS (Chave Embutida)"])
-        self.combo_licenca.setCurrentText(self.config.get("license", "FREE"))
+        
+        lic_atual = self.config.get("license", "FREE")
+        if "SAAS" in lic_atual: lic_atual = "SAAS (Chave Embutida)" # Conserta se ficou salvo o lixo da versão anterior
+        
+        self.combo_licenca.setCurrentText(lic_atual)
         self.combo_licenca.currentTextChanged.connect(self.update_ia_tab_visibility)
         vbox_lic.addWidget(self.combo_licenca)
         vbox_lic.addStretch()
@@ -639,37 +698,86 @@ class ConfigDialog(QDialog):
         self.tab_ia = QWidget()
         self.vbox_ia = QVBoxLayout(self.tab_ia)
         
-        self.lbl_aviso_saas = QLabel("✅ <b>Licença SaaS Ativa</b>\nVocê está utilizando a chave premium embutida.\nNenhuma configuração extra é necessária.")
-        self.lbl_aviso_saas.setStyleSheet("color: #28a745;")
+        self.lbl_aviso_saas = QLabel("✅ <b>Licença SaaS Ativa</b>\nO motor principal está liberado.")
+        self.lbl_aviso_saas.setStyleSheet("color: #28a745; margin-bottom: 5px;")
         self.vbox_ia.addWidget(self.lbl_aviso_saas)
+
+        # --- OPÇÃO 1: GOOGLE GEMINI ---
+        self.chk_gemini = QCheckBox("🔵 Usar Google Gemini (Padrão)")
+        self.chk_gemini.setStyleSheet("font-weight: bold; font-size: 13px;")
+        self.vbox_ia.addWidget(self.chk_gemini)
         
-        self.container_byok = QWidget()
-        vbox_byok = QVBoxLayout(self.container_byok)
-        vbox_byok.setContentsMargins(0,0,0,0)
-        vbox_byok.addWidget(QLabel("Sua Chave de API Gemini (BYOK):"))
+        self.container_gemini = QWidget()
+        vbox_gem = QVBoxLayout(self.container_gemini)
+        vbox_gem.setContentsMargins(15, 0, 0, 10)
+        
+        self.wrapper_keys_gemini = QWidget()
+        lay_keys_gem = QVBoxLayout(self.wrapper_keys_gemini)
+        lay_keys_gem.setContentsMargins(0, 0, 0, 0)
+        lay_keys_gem.addWidget(QLabel("Chave de API Gemini (BYOK):"))
         self.txt_api_key = QLineEdit(self.config.get("api_key", ""))
         self.txt_api_key.setEchoMode(QLineEdit.Password)
-        vbox_byok.addWidget(self.txt_api_key)
-        self.vbox_ia.addWidget(self.container_byok)
+        lay_keys_gem.addWidget(self.txt_api_key)
+        vbox_gem.addWidget(self.wrapper_keys_gemini)
         
-        # --- MODELOS DINÂMICOS ---
-        hbox_model = QHBoxLayout()
+        hbox_mod_gem = QHBoxLayout()
         self.combo_model = QComboBox()
         self.combo_model.addItem(self.config.get("model", "gemini-2.5-flash"))
+        self.btn_load_models = QPushButton("🔄 Buscar Modelos")
+        self.btn_load_models.clicked.connect(self.load_gemini_models_live)
+        hbox_mod_gem.addWidget(QLabel("Modelo:"))
+        hbox_mod_gem.addWidget(self.combo_model, 1)
+        hbox_mod_gem.addWidget(self.btn_load_models)
+        vbox_gem.addLayout(hbox_mod_gem)
+        self.vbox_ia.addWidget(self.container_gemini)
+
+        # --- OPÇÃO 2: CLOUDFLARE WORKERS AI ---
+        hbox_cf_title = QHBoxLayout()
+        self.chk_cloudflare = QCheckBox("🟠 Usar Cloudflare Workers AI")
+        self.chk_cloudflare.setStyleSheet("font-weight: bold; font-size: 13px;")
+        hbox_cf_title.addWidget(self.chk_cloudflare)
         
-        self.btn_load_models = QPushButton("🔄 Carregar Modelos")
-        self.btn_load_models.clicked.connect(self.load_dynamic_models)
+        self.btn_upgrade_elite = QPushButton("⭐ Upgrade ELITE")
+        self.btn_upgrade_elite.setStyleSheet("background-color: #ffc107; color: black; font-weight: bold; padding: 2px 8px; border-radius: 4px;")
+        self.btn_upgrade_elite.setCursor(Qt.PointingHandCursor)
+        self.btn_upgrade_elite.clicked.connect(self.abrir_loja_upgrade)
+        self.btn_upgrade_elite.hide()
         
-        hbox_model.addWidget(QLabel("Modelo de Inteligência Artificial:"))
-        hbox_model.addWidget(self.combo_model)
-        hbox_model.addWidget(self.btn_load_models)
-        self.vbox_ia.addLayout(hbox_model)
+        hbox_cf_title.addWidget(self.btn_upgrade_elite)
+        hbox_cf_title.addStretch()
+        self.vbox_ia.addLayout(hbox_cf_title)
+        
+        self.container_cf = QWidget()
+        vbox_cf = QVBoxLayout(self.container_cf)
+        vbox_cf.setContentsMargins(15, 0, 0, 10)
+        
+        self.wrapper_keys_cf = QWidget()
+        lay_keys_cf = QVBoxLayout(self.wrapper_keys_cf)
+        lay_keys_cf.setContentsMargins(0, 0, 0, 0)
+        lay_keys_cf.addWidget(QLabel("Cloudflare Account ID (BYOK):"))
+        self.txt_cf_account = QLineEdit(self.config.get("cf_account_id", ""))
+        lay_keys_cf.addWidget(self.txt_cf_account)
+        lay_keys_cf.addWidget(QLabel("Cloudflare API Token (BYOK):"))
+        self.txt_cf_token = QLineEdit(self.config.get("cf_api_token", ""))
+        self.txt_cf_token.setEchoMode(QLineEdit.Password)
+        lay_keys_cf.addWidget(self.txt_cf_token)
+        vbox_cf.addWidget(self.wrapper_keys_cf)
+        
+        hbox_mod_cf = QHBoxLayout()
+        self.combo_cf_model = QComboBox()
+        self.combo_cf_model.addItem(self.config.get("cf_model", "@cf/meta/llama-3-8b-instruct"))
+        self.btn_load_cf = QPushButton("🔄 Carregar CF")
+        self.btn_load_cf.clicked.connect(self.load_cf_models_live)
+        hbox_mod_cf.addWidget(QLabel("Modelo:"))
+        hbox_mod_cf.addWidget(self.combo_cf_model, 1)
+        hbox_mod_cf.addWidget(self.btn_load_cf)
+        vbox_cf.addLayout(hbox_mod_cf)
+        self.vbox_ia.addWidget(self.container_cf)
         self.vbox_ia.addStretch()
-        
-        # Aba 3: Aparência & Acessibilidade
+
+        # --- Aba 3: Aparência ---
         self.tab_visual = QWidget()
         vbox_vis = QVBoxLayout(self.tab_visual)
-        
         vbox_vis.addWidget(QLabel("Tema do Aplicativo:"))
         self.combo_theme = QComboBox()
         self.combo_theme.addItems(["Escuro", "Claro"])
@@ -698,7 +806,16 @@ class ConfigDialog(QDialog):
         btn_salvar.setStyleSheet("background-color: #0078d7; color: white; padding: 10px; font-weight: bold;")
         btn_salvar.clicked.connect(self.save_and_close)
         layout.addWidget(btn_salvar)
-        
+
+        self.chk_gemini.toggled.connect(lambda checked: self.alternar_provedor("gemini", checked))
+        self.chk_cloudflare.toggled.connect(lambda checked: self.alternar_provedor("cloudflare", checked))
+
+        prov_atual = self.config.get("provedor", "gemini")
+        if prov_atual == "cloudflare":
+            self.chk_cloudflare.setChecked(True)
+        else:
+            self.chk_gemini.setChecked(True)
+            
         self.update_ia_tab_visibility(self.combo_licenca.currentText())
         
     def aplicar_zoom_ao_vivo(self, v):
@@ -710,92 +827,179 @@ class ConfigDialog(QDialog):
     def update_ia_tab_visibility(self, licensa):
         if licensa == "SAAS (Chave Embutida)":
             self.lbl_aviso_saas.show()
-            self.container_byok.hide()
+            self.wrapper_keys_gemini.hide()
+            self.wrapper_keys_cf.hide()
             self.tabs.setTabEnabled(1, True)
+            
+            if not self.config.get("saas_elite_ativo"):
+                self.chk_cloudflare.setEnabled(False)
+                self.btn_upgrade_elite.show()
+                if hasattr(self, 'chk_cloudflare') and self.chk_cloudflare.isChecked():
+                    self.chk_gemini.setChecked(True)
+            else:
+                self.chk_cloudflare.setEnabled(True)
+                self.btn_upgrade_elite.hide()
+                
         elif licensa == "BYOK (Sua Chave)":
             self.lbl_aviso_saas.hide()
-            self.container_byok.show()
+            self.wrapper_keys_gemini.show()
+            self.wrapper_keys_cf.show()
             self.tabs.setTabEnabled(1, True)
+            if hasattr(self, 'chk_cloudflare'):
+                self.chk_cloudflare.setEnabled(True)
+                self.btn_upgrade_elite.hide()
         else:
             self.tabs.setTabEnabled(1, False) 
 
-    def load_dynamic_models(self):
+    def abrir_loja_upgrade(self):
+        if not self.config.get("token_master"):
+            QMessageBox.warning(self, "Aviso", "Autenticação necessária. Salve as configurações primeiro para fazer login.")
+            return
+            
+        # AQUI ESTÁ A CORREÇÃO: Manda abrir a loja passando "ELITE" no filtro
+        loja = LojaDialog(self.config.get("token_master"), "ELITE", self)
+        if loja.exec() == QDialog.Accepted:
+            self.config["token_master"] = loja.token_cliente
+            if loja.plano_comprado and "ELITE" in loja.plano_comprado.upper():
+                self.config["saas_elite_ativo"] = True
+                self.config["saas_padrao_ativo"] = False
+                QMessageBox.information(self, "Bem-vindo ao Elite!", "Poder Multi-IA liberado com sucesso!")
+                self.update_ia_tab_visibility("SAAS (Chave Embutida)")
+
+    def alternar_provedor(self, origem, checked):
+        if not checked:
+            if origem == "gemini" and not self.chk_cloudflare.isChecked():
+                self.chk_gemini.blockSignals(True)
+                self.chk_gemini.setChecked(True)
+                self.chk_gemini.blockSignals(False)
+            elif origem == "cloudflare" and not self.chk_gemini.isChecked():
+                self.chk_cloudflare.blockSignals(True)
+                self.chk_cloudflare.setChecked(True)
+                self.chk_cloudflare.blockSignals(False)
+            return
+
+        if origem == "gemini":
+            self.chk_cloudflare.blockSignals(True)
+            self.chk_cloudflare.setChecked(False)
+            self.chk_cloudflare.blockSignals(False)
+            self.container_gemini.setEnabled(True)
+            self.container_cf.setEnabled(False) 
+        else:
+            self.chk_gemini.blockSignals(True)
+            self.chk_gemini.setChecked(False)
+            self.chk_gemini.blockSignals(False)
+            self.container_cf.setEnabled(True)
+            self.container_gemini.setEnabled(False)
+
+    def load_gemini_models_live(self):
         licensa = self.combo_licenca.currentText()
         chave = self.txt_api_key.text().strip() if licensa == "BYOK (Sua Chave)" else None
         
-        self.btn_load_models.setText("⏳ Carregando...")
+        if licensa == "BYOK (Sua Chave)" and not chave:
+            QMessageBox.warning(self, "Aviso", "Digite a chave BYOK para consultar modelos.")
+            return
+            
+        self.btn_load_models.setText("⏳ Buscando...")
         QApplication.processEvents()
         
-        try:
-            modelos = motor_ia.listar_modelos(chave)
-            self.combo_model.clear()
+        modelos, erro = motor_ia.listar_modelos_gemini(chave)
+        self.combo_model.clear()
+        if modelos: 
             self.combo_model.addItems(modelos)
+        else: 
+            QMessageBox.critical(self, "Erro na API Gemini", f"A API do Google recusou a conexão.\n\nDetalhe do erro:\n{erro}")
+        self.btn_load_models.setText("🔄 Buscar Modelos")
+
+    def load_cf_models_live(self):
+        acc = self.txt_cf_account.text().strip()
+        tok = self.txt_cf_token.text().strip()
+        self.btn_load_cf.setText("⏳ Carregando...")
+        QApplication.processEvents()
+        
+        modelos, status = motor_ia.listar_modelos_cloudflare(acc, tok)
+        self.combo_cf_model.clear()
+        
+        if modelos:
+            self.combo_cf_model.addItems(modelos)
+        else:
+            QMessageBox.critical(self, "Erro na API Cloudflare", f"Não foi possível carregar os modelos.\n\nDetalhe:\n{status}")
             
-            modelo_salvo = self.config.get("model", "gemini-2.5-flash")
-            if modelo_salvo in modelos:
-                self.combo_model.setCurrentText(modelo_salvo)
-        except Exception as e:
-            QMessageBox.warning(self, "Erro", f"Não foi possível carregar os modelos: {str(e)}")
-            
-        self.btn_load_models.setText("🔄 Carregar Modelos")
+        self.btn_load_cf.setText("🔄 Carregar CF")
 
     def save_and_close(self):
         licenca_escolhida = self.combo_licenca.currentText()
+        licenca_salva = self.config.get("license", "FREE")
         
-        # 1. Barreira do BYOK (O Aviso Salva-Vidas)
+        # 1. Barreira do BYOK (Com Reversão Automática Anti-Bypass)
         if licenca_escolhida == "BYOK (Sua Chave)":
-            resp = QMessageBox.question(
-                self, 
-                "Aviso Importante - Plano BYOK", 
-                "O plano BYOK (Bring Your Own Key) exige que você tenha sua própria chave de desenvolvedor da API do Google Gemini.\n\n"
-                "Se você não é desenvolvedor ou não sabe do que se trata, recomendamos adquirir o plano SAAS para evitar dores de cabeça.\n\n"
-                "Tem certeza que deseja prosseguir com o BYOK?", 
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if resp == QMessageBox.No:
-                return # Aborta o salvamento, deixa ele na tela para trocar
-                
-        # 2. Barreira do SAAS (Autenticação Obrigatória + Checkout na Loja)
-        if licenca_escolhida == "SAAS (Chave Embutida)":
-            # GOLPE VEGATECH: Se a licença já for SAAS, não barra o salvamento de zoom pedindo token!
-            ja_era_saas = (self.config.get("license") == "SAAS (Chave Embutida)")
-            
-            if not self.config.get("saas_ativo") and not ja_era_saas:
+            if not self.config.get("byok_ativo"): 
                 if not self.config.get("token_master"):
                     dialog_auth = LoginCadastroDialog(self)
                     if dialog_auth.exec() == QDialog.Accepted:
                         self.config["token_master"] = dialog_auth.token_recebido
-                    else:
-                        return # Ele fechou a janela sem logar, então aborta o salvamento
+                    else: 
+                        self.combo_licenca.setCurrentText(licenca_salva)
+                        return
                 
-                # Abre a Loja apenas se for a primeira ativação do SaaS!
-                loja = LojaDialog(self.config.get("token_master"), self)
+                loja = LojaDialog(self.config.get("token_master"), "BYOK", self)
                 if loja.exec() == QDialog.Accepted:
                     self.config["token_master"] = loja.token_cliente
-                    self.config["saas_ativo"] = True # <--- GRAVA A PERMISSÃO ETERNA!
-                else:
+                    self.config["byok_ativo"] = True
+                else: 
+                    self.combo_licenca.setCurrentText(licenca_salva)
                     return
-            else:
-                # Garante que a flag fique salva na memória se ele já tinha o plano
-                self.config["saas_ativo"] = True
 
-        # Se passou pelas barreiras, salva tudo
+        # 2. Barreira do SAAS (Com Reversão Automática Anti-Bypass)
+        elif licenca_escolhida == "SAAS (Chave Embutida)":
+            if not self.config.get("saas_padrao_ativo") and not self.config.get("saas_elite_ativo"):
+                if not self.config.get("token_master"):
+                    dialog_auth = LoginCadastroDialog(self)
+                    if dialog_auth.exec() == QDialog.Accepted:
+                        self.config["token_master"] = dialog_auth.token_recebido
+                    else: 
+                        self.combo_licenca.setCurrentText(licenca_salva)
+                        return
+                
+                loja = LojaDialog(self.config.get("token_master"), "SAAS", self)
+                if loja.exec() == QDialog.Accepted:
+                    self.config["token_master"] = loja.token_cliente
+                    if loja.plano_comprado and "ELITE" in loja.plano_comprado.upper():
+                        self.config["saas_elite_ativo"] = True
+                        self.config["saas_padrao_ativo"] = False
+                    else:
+                        self.config["saas_padrao_ativo"] = True
+                        self.config["saas_elite_ativo"] = False
+                else: 
+                    self.combo_licenca.setCurrentText(licenca_salva)
+                    return
+
+        # Se passou e pagou (ou já tinha pago), salva limpo
         self.config["license"] = licenca_escolhida
-        self.config["api_key"] = self.txt_api_key.text().strip()
-        self.config["model"] = self.combo_model.currentText()
         self.config["theme"] = self.combo_theme.currentText()
         self.config["zoom"] = self.slider_zoom.value()
-        self.accept()
         
+        self.config["provedor"] = "gemini" if self.chk_gemini.isChecked() else "cloudflare"
+        self.config["api_key"] = self.txt_api_key.text().strip()
+        self.config["model"] = self.combo_model.currentText()
+        
+        self.config["cf_account_id"] = self.txt_cf_account.text().strip()
+        self.config["cf_api_token"] = self.txt_cf_token.text().strip()
+        self.config["cf_model"] = self.combo_cf_model.currentText()
+        
+        # Garante a gravação permanente das chaves de ativação na memória
+        self.config["saas_elite_ativo"] = self.config.get("saas_elite_ativo", False)
+        self.config["saas_padrao_ativo"] = self.config.get("saas_padrao_ativo", False)
+        self.config["byok_ativo"] = self.config.get("byok_ativo", False)
+
+        self.accept()        
 class WorkerIAGerador(QThread):
     progresso = Signal(int, str)
     concluido = Signal()
 
-    def __init__(self, tema, api_key_usuario, modelo, roteiro_carregado=None):
+    def __init__(self, tema, config_ia, roteiro_carregado=None):
         super().__init__()
         self.tema = tema
-        self.api_key_usuario = api_key_usuario
-        self.modelo = modelo
+        self.config_ia = config_ia
         self.roteiro_carregado = roteiro_carregado
         self.roteiro = None
         self.slide_images_dict = {}
@@ -803,12 +1007,11 @@ class WorkerIAGerador(QThread):
 
     def run(self):
         try:
-            # 1. Trazendo o Roteiro
             if self.roteiro_carregado:
                 self.roteiro = self.roteiro_carregado
             else:
-                self.progresso.emit(5, "Conectando com a IA (Gemini)...")
-                sucesso, roteiro_ou_erro = motor_ia.gerar_roteiro_slides(self.tema, self.api_key_usuario, self.modelo)
+                self.progresso.emit(5, "Conectando ao motor de IA...")
+                sucesso, roteiro_ou_erro = motor_ia.gerar_roteiro_slides(self.tema, self.config_ia)
                 
                 if self.isInterruptionRequested(): return
                 
@@ -915,17 +1118,58 @@ class AppPaiVega(QMainWindow):
         self.checar_notas_atualizacao()
 
     def load_config(self):
+        import base64
+        import json
+        default_config = {
+            "license": "FREE", 
+            "api_key": "", 
+            "model": "gemini-2.5-flash", 
+            "theme": "Escuro", 
+            "zoom": 100,
+            "saas_elite_ativo": False,
+            "saas_padrao_ativo": False,
+            "byok_ativo": False
+        }
+        
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    conteudo = f.read().strip()
+                    
+                if conteudo.startswith("{"): 
+                    dados = json.loads(conteudo)
+                    if dados.get("license") == "SAAS (Chave Embutida)" and not dados.get("token_master"):
+                        dados["license"] = "FREE" 
+                    # Garante que os campos de ativação venham preenchidos se existirem
+                    for k, v in default_config.items():
+                        if k not in dados: dados[k] = v
+                    return dados
+                else:
+                    texto_reverso = conteudo[::-1]
+                    json_str = base64.b64decode(texto_reverso.encode('utf-8')).decode('utf-8')
+                    dados = json.loads(json_str)
+                    for k, v in default_config.items():
+                        if k not in dados: dados[k] = v
+                    return dados
             except: pass
-        return {"license": "FREE", "api_key": "", "model": "gemini-2.5-flash", "theme": "Escuro", "zoom": 100}
+            
+        return default_config
 
     def save_config(self):
+        import base64
+        import json
         self.config["last_dir"] = self.last_dir
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
-            json.dump(self.config, f, indent=4)
+        try:
+            json_str = json.dumps(self.config)
+            
+            # GOLPE VEGATECH: Aplica Base64 e inverte a string pra confundir xeretas
+            b64_str = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
+            texto_ofuscado = b64_str[::-1]
+            
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                f.write(texto_ofuscado)
+        except Exception as e:
+            print(f"Erro na blindagem do config: {e}")
 
     def open_config(self):
         dialog = ConfigDialog(self.config, self)
@@ -1057,25 +1301,37 @@ class AppPaiVega(QMainWindow):
         self.main_layout.addWidget(self.btn_load)
         self.main_layout.addWidget(self.lbl_pptx)
 
-        hbox_ia = QHBoxLayout()
-        self.txt_tema = QTextEdit()
-        self.txt_tema.setPlaceholderText("Ou digite o tema para a IA criar do zero...")
-        self.txt_tema.setMaximumHeight(80) 
-        
         from PySide6.QtWidgets import QSizePolicy
+        from PySide6.QtCore import QEvent
+
+        hbox_ia = QHBoxLayout()
+        
+        # --- BLOCO DA IA COM TÍTULO E GATILHO ---
+        vbox_tema = QVBoxLayout()
+        lbl_titulo_ia = QLabel("🧠 Motor de Criação por Inteligência Artificial:")
+        lbl_titulo_ia.setStyleSheet("font-weight: bold; font-size: 14px; color: #0078d7;")
+        
+        self.txt_tema = QTextEdit()
+        self.txt_tema.setPlaceholderText("Digite o tema para a IA criar a apresentação...")
+        self.txt_tema.setMaximumHeight(80) 
+        # O SEGREDO DO QTEXTEDIT: Tem que escutar o VIEWPORT, não o widget solto!
+        self.txt_tema.viewport().installEventFilter(self) 
+        
+        vbox_tema.addWidget(lbl_titulo_ia)
+        vbox_tema.addWidget(self.txt_tema)
         
         self.btn_gerar_ia = QPushButton("Criar Apresentação\nAutomática (IA)")
         self.btn_gerar_ia.setStyleSheet("background-color: #2b5c8f; color: white; font-weight: bold; padding: 10px;")
         self.btn_gerar_ia.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding) # Libera o crescimento
         self.btn_gerar_ia.clicked.connect(self.gerar_com_ia)
         
-        hbox_ia.addWidget(self.txt_tema)
         self.btn_historico = QPushButton("🕒 Recuperar\nSalvo")
         self.btn_historico.setStyleSheet("background-color: #555; color: white; font-weight: bold; padding: 10px;")
         self.btn_historico.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding) # Libera o crescimento
         self.btn_historico.setCursor(Qt.PointingHandCursor)
         self.btn_historico.clicked.connect(self.abrir_historico)
         
+        hbox_ia.addLayout(vbox_tema)
         hbox_ia.addWidget(self.btn_gerar_ia)
         hbox_ia.addWidget(self.btn_historico)
         self.main_layout.addLayout(hbox_ia)
@@ -1313,20 +1569,36 @@ class AppPaiVega(QMainWindow):
         self.update_main_ui_lock()   
 
     def update_main_ui_lock(self):
-        if self.config.get("license", "FREE") == "FREE":
+        # AQUI FOI CORRIGIDO O BUG: Agora ele verifica se a palavra FREE está DENTRO da string!
+        if "FREE" in self.config.get("license", "FREE"):
             self.txt_tema.setReadOnly(True)
-            self.txt_tema.setPlaceholderText("🔒 Geração Inteligente bloqueada (Licença FREE).")
+            self.txt_tema.setPlaceholderText("🔒 Geração Inteligente bloqueada (Licença FREE). Clique aqui para assinar.")
             self.txt_tema.setStyleSheet("background-color: #444; color: #888; border: 1px solid #333;")
             
             self.btn_gerar_ia.setEnabled(False)
             self.btn_gerar_ia.setStyleSheet("background-color: #555; color: #888; font-weight: bold; padding: 10px;")
         else:
             self.txt_tema.setReadOnly(False)
-            self.txt_tema.setPlaceholderText("Ou digite o tema para a IA criar do zero...")
+            self.txt_tema.setPlaceholderText("Digite o tema para a IA criar a apresentação do zero...")
             self.txt_tema.setStyleSheet("") 
             
             self.btn_gerar_ia.setEnabled(True)
             self.btn_gerar_ia.setStyleSheet("background-color: #2b5c8f; color: white; font-weight: bold; padding: 10px;")
+
+    # --- O DETETIVE DE CLIQUES (AVISO PARA CONVERSÃO DE CLIENTE) ---
+    def eventFilter(self, obj, event):
+        from PySide6.QtCore import QEvent
+        # Agora ele verifica se o clique aconteceu na área interna (viewport) do campo de texto
+        if obj == self.txt_tema.viewport() and event.type() == QEvent.MouseButtonPress:
+            if "FREE" in self.config.get("license", "FREE"):
+                QMessageBox.warning(
+                    self, 
+                    "Recurso Premium Bloqueado", 
+                    "A geração de apresentações por Inteligência Artificial é um recurso VIP!\n\n"
+                    "Clique no botão '⚙️ Configurações / Licença' no topo da tela, escolha um dos nossos planos na Loja e libere a IA para trabalhar por você."
+                )
+                return True # Consome o evento e não deixa o clique entrar na caixa de texto
+        return super().eventFilter(obj, event)
             
     def atualizar_preview_real(self, *args):
         # --- 1. CAPTURAR AS FONTES E CORES ATUAIS ---
@@ -1519,8 +1791,8 @@ class AppPaiVega(QMainWindow):
             self.btn_gerar_ia.setEnabled(False)
             self.btn_historico.setEnabled(False)
 
-            # Inicia o Trabalho Paralelo
-            worker = WorkerIAGerador(tema, api_key_usuario, modelo)
+            # Inicia o Trabalho Paralelo entregando todas as configs de IA
+            worker = WorkerIAGerador(tema, self.config)
             # Liga o progresso da thread direto na barra da tela
             worker.progresso.connect(lambda v, t: (progress.setValue(v), progress.setLabelText(t)))
             progress.canceled.connect(worker.requestInterruption)
@@ -1728,8 +2000,13 @@ class AppPaiVega(QMainWindow):
                     "caminho": caminho_salvo
                 })
                 
-                if len(historico) > 10: 
-                    historico = historico[-10:]
+                # MANTÉM APENAS OS 5 ÚLTIMOS E FAZ A FAXINA FÍSICA NO HD
+                while len(historico) > 5:
+                    removido = historico.pop(0)
+                    try:
+                        if os.path.exists(removido["caminho"]):
+                            os.remove(removido["caminho"])
+                    except: pass
                     
                 with open(HISTORICO_JSON_FILE, "w", encoding="utf-8") as f:
                     json.dump(historico, f, indent=4, ensure_ascii=False)
@@ -1770,14 +2047,37 @@ class AppPaiVega(QMainWindow):
         except:
             historico = []
 
-        # Remove da lista arquivos que o usuário apagou manualmente do PC
-        historico_valido = [h for h in historico if "caminho" in h and os.path.exists(h["caminho"])]
+        historico_valido = []
+        alterou_json = False
+        
+        for h in historico:
+            caminho_salvo = h.get("caminho", "")
+            
+            # GOLPE DA MIGRAÇÃO: Se a rota antiga não existir, redireciona para a nova pasta AppData
+            if not os.path.exists(caminho_salvo):
+                nome_arquivo = os.path.basename(caminho_salvo)
+                caminho_tentativa = os.path.join(PASTA_HISTORICO_PPTX, nome_arquivo)
+                if os.path.exists(caminho_tentativa):
+                    h["caminho"] = caminho_tentativa
+                    caminho_salvo = caminho_tentativa
+                    alterou_json = True
+            
+            if os.path.exists(caminho_salvo):
+                historico_valido.append(h)
+
+        # Força limite de 5 na visualização (caso venha de versões antigas)
+        historico_valido = historico_valido[-5:]
+
+        # Salva as rotas consertadas de volta no arquivo
+        if alterou_json:
+            with open(HISTORICO_JSON_FILE, "w", encoding="utf-8") as f:
+                json.dump(historico_valido, f, indent=4, ensure_ascii=False)
 
         if not historico_valido:
             QMessageBox.information(self, "Histórico Vazio", "Nenhuma apresentação física foi encontrada. Gere uma nova!")
             return
 
-        # Monta a lista pro usuário escolher
+        # Monta a lista com no máximo 5 itens
         itens = [f"{item['data']} - {item.get('tema', 'Tema Desconhecido')}" for item in reversed(historico_valido)]
         
         item_selecionado, ok = QInputDialog.getItem(
