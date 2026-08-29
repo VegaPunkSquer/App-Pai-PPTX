@@ -207,3 +207,8 @@
 2026-07-22 08:05:15 [INFO] -> === MOTOR IA INICIADO ===
 2026-07-22 08:05:22 [INFO] -> Buscando lista de modelos na Cloudflare via /ai/models/search...
 2026-07-22 08:05:22 [INFO] -> Encontrados 26 modelos de texto na Cloudflare.
+2026-08-28 19:42:37 [INFO] -> === MOTOR IA INICIADO ===
+2026-08-28 19:55:31 [INFO] -> === MOTOR IA INICIADO ===
+2026-08-28 20:06:03 [INFO] -> === MOTOR IA INICIADO ===
+2026-08-28 20:06:41 [INFO] -> === MOTOR IA INICIADO ===
+2026-08-28 20:09:38 [INFO] -> === MOTOR IA INICIADO ===

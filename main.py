@@ -484,7 +484,8 @@ class LojaDialog(QDialog):
     def init_ui(self):
         self.layout = QVBoxLayout(self)
         
-        self.lbl_titulo = QLabel("⏳ A carregar planos disponíveis...")
+        import idiomas
+        self.lbl_titulo = QLabel(idiomas.tr("loja_loading"))
         self.lbl_titulo.setAlignment(Qt.AlignCenter)
         self.lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
         self.layout.addWidget(self.lbl_titulo)
@@ -505,7 +506,7 @@ class LojaDialog(QDialog):
         # ------------------------------------------------------
         
         self.inp_cupom = QLineEdit()
-        self.inp_cupom.setPlaceholderText("Tem um cupom de desconto? (Opcional)")
+        self.inp_cupom.setPlaceholderText(idiomas.tr("loja_cupom"))
         self.inp_cupom.setStyleSheet("font-size: 14px; padding: 10px; border-radius: 5px; border: 1px solid gray;")
         self.layout.addWidget(self.inp_cupom)
         
@@ -531,11 +532,12 @@ class LojaDialog(QDialog):
             item = self.container_planos.takeAt(0)
             if item.widget(): item.widget().deleteLater()
         
+        import idiomas
         if not planos:
-            self.lbl_titulo.setText("Nenhum plano configurado no Master.")
+            self.lbl_titulo.setText(idiomas.tr("loja_vazio"))
             return
             
-        self.lbl_titulo.setText("Escolha o Pacote Ideal para Você:")
+        self.lbl_titulo.setText(idiomas.tr("loja_escolha"))
         
         # MÁGICA DA ORDENAÇÃO: Força a vitrine a seguir a hierarquia clássica de SaaS
         ordem_ciclos = {"mensal": 1, "trimestral": 2, "semestral": 3, "anual": 4, "unico": 5}
@@ -590,7 +592,7 @@ class LojaDialog(QDialog):
                 card_layout.addWidget(lbl_trial)
             
             # Botão de Assinar
-            btn_comprar = QPushButton(f"ASSINAR AGORA")
+            btn_comprar = QPushButton(idiomas.tr("loja_btn_assinar"))
             btn_comprar.setMinimumHeight(45) # <--- BLINDAGEM CONTRA ESMAGAMENTO
             btn_comprar.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; font-size: 15px; border-radius: 6px; border: none;")
             btn_comprar.setCursor(Qt.PointingHandCursor)
@@ -607,8 +609,9 @@ class LojaDialog(QDialog):
             else:
                 return
 
+        import idiomas
         cupom = self.inp_cupom.text().strip()
-        self.lbl_status.setText("A gerar ambiente seguro de pagamento...")
+        self.lbl_status.setText(idiomas.tr("loja_gerando"))
         self.setEnabled(False)
         
         self.plano_em_andamento = plano_nome # Anota qual botão ele clicou
@@ -669,22 +672,17 @@ class ConfigDialog(QDialog):
         vbox_lic = QVBoxLayout(self.tab_licenca)
         
         # O TÍTULO EXPLÍCITO DA ABA
-        lbl_explicacao_licenca = QLabel(
-            "<b>💳 GESTÃO DE PLANOS E ASSINATURAS</b><br><br>"
-            "Selecione a licença desejada abaixo para liberar a geração de apresentações. "
-            "O plano <b>SAAS ELITE</b> desbloqueia a Inteligência Artificial da Cloudflare, "
-            "enquanto o <b>SAAS Padrão</b> usa o Google Gemini.<br><br>"
-            "<i>(Escolha o plano e clique em Salvar para abrir a loja)</i>"
-        )
-        lbl_explicacao_licenca.setWordWrap(True)
-        # ARRANQUEI A COR E A FONTE CHUMBADAS! Agora ele respeita o seu Zoom e o seu Tema.
-        lbl_explicacao_licenca.setStyleSheet("margin-bottom: 10px;") 
-        vbox_lic.addWidget(lbl_explicacao_licenca)
+        self.lbl_explicacao_licenca = QLabel()
+        self.lbl_explicacao_licenca.setWordWrap(True)
+        self.lbl_explicacao_licenca.setStyleSheet("margin-bottom: 10px;") 
+        vbox_lic.addWidget(self.lbl_explicacao_licenca)
         
-        vbox_lic.addWidget(QLabel("<b>Status da Licença atual:</b>"))
+        self.lbl_status_lic = QLabel()
+        vbox_lic.addWidget(self.lbl_status_lic)
         self.combo_licenca = QComboBox()
-        # DE VOLTA AS 3 OPÇÕES LIMPAS E DIRETAS:
-        self.combo_licenca.addItems(["FREE (Edição Manual)", "BYOK (Sua Chave)", "SAAS (Chave Embutida)"])
+        self.combo_licenca.addItem("FREE (Edição Manual)", "FREE (Edição Manual)")
+        self.combo_licenca.addItem("BYOK (Sua Chave)", "BYOK (Sua Chave)")
+        self.combo_licenca.addItem("SAAS (Chave Embutida)", "SAAS (Chave Embutida)")
         
         lic_atual = self.config.get("license", "FREE")
         if "SAAS" in lic_atual: lic_atual = "SAAS (Chave Embutida)" # Conserta se ficou salvo o lixo da versão anterior
@@ -778,13 +776,30 @@ class ConfigDialog(QDialog):
         # --- Aba 3: Aparência ---
         self.tab_visual = QWidget()
         vbox_vis = QVBoxLayout(self.tab_visual)
-        vbox_vis.addWidget(QLabel("Tema do Aplicativo:"))
+        
+        self.lbl_idioma = QLabel()
+        vbox_vis.addWidget(self.lbl_idioma)
+        self.combo_idioma = QComboBox()
+        self.combo_idioma.addItem("Português", "pt")
+        self.combo_idioma.addItem("English", "en")
+        idx_idioma = self.combo_idioma.findData(self.config.get("idioma", "pt"))
+        if idx_idioma >= 0: self.combo_idioma.setCurrentIndex(idx_idioma)
+        self.combo_idioma.currentIndexChanged.connect(self.mudar_idioma_ao_vivo)
+        vbox_vis.addWidget(self.combo_idioma)
+
+        self.lbl_tema = QLabel()
+        self.lbl_tema.setStyleSheet("margin-top: 10px;")
+        vbox_vis.addWidget(self.lbl_tema)
         self.combo_theme = QComboBox()
-        self.combo_theme.addItems(["Escuro", "Claro"])
-        self.combo_theme.setCurrentText(self.config.get("theme", "Escuro"))
+        self.combo_theme.addItem("Escuro", "Escuro")
+        self.combo_theme.addItem("Claro", "Claro")
+        idx_tema = self.combo_theme.findData(self.config.get("theme", "Escuro"))
+        if idx_tema >= 0: self.combo_theme.setCurrentIndex(idx_tema)
         vbox_vis.addWidget(self.combo_theme)
         
-        vbox_vis.addWidget(QLabel("\n🔎 Zoom da Tela (Acessibilidade):"))
+        self.lbl_zoom = QLabel()
+        self.lbl_zoom.setStyleSheet("margin-top: 10px;")
+        vbox_vis.addWidget(self.lbl_zoom)
         self.slider_zoom = QSlider(Qt.Horizontal)
         self.slider_zoom.setRange(0, 150)
         self.slider_zoom.setValue(self.config.get("zoom", 100))
@@ -802,10 +817,10 @@ class ConfigDialog(QDialog):
         self.tabs.addTab(self.tab_visual, "Aparência")
         layout.addWidget(self.tabs)
 
-        btn_salvar = QPushButton("Salvar Configurações")
-        btn_salvar.setStyleSheet("background-color: #0078d7; color: white; padding: 10px; font-weight: bold;")
-        btn_salvar.clicked.connect(self.save_and_close)
-        layout.addWidget(btn_salvar)
+        self.btn_salvar = QPushButton()
+        self.btn_salvar.setStyleSheet("background-color: #0078d7; color: white; padding: 10px; font-weight: bold;")
+        self.btn_salvar.clicked.connect(self.save_and_close)
+        layout.addWidget(self.btn_salvar)
 
         self.chk_gemini.toggled.connect(lambda checked: self.alternar_provedor("gemini", checked))
         self.chk_cloudflare.toggled.connect(lambda checked: self.alternar_provedor("cloudflare", checked))
@@ -817,7 +832,36 @@ class ConfigDialog(QDialog):
             self.chk_gemini.setChecked(True)
             
         self.update_ia_tab_visibility(self.combo_licenca.currentText())
+        self.atualizar_textos_ui()
         
+    def mudar_idioma_ao_vivo(self):
+        import idiomas
+        idiomas.set_idioma(self.combo_idioma.currentData())
+        self.atualizar_textos_ui()
+        if self.parent() and hasattr(self.parent(), 'atualizar_textos_ui'):
+            self.parent().atualizar_textos_ui()
+
+    def atualizar_textos_ui(self):
+        import idiomas
+        self.setWindowTitle(idiomas.tr("cfg_title"))
+        self.lbl_explicacao_licenca.setText(idiomas.tr("cfg_lbl_lic"))
+        self.lbl_status_lic.setText(idiomas.tr("cfg_status_lic"))
+        self.lbl_idioma.setText(idiomas.tr("cfg_lbl_idioma"))
+        self.lbl_tema.setText(idiomas.tr("cfg_lbl_tema"))
+        self.lbl_zoom.setText(idiomas.tr("cfg_lbl_zoom"))
+        self.btn_salvar.setText(idiomas.tr("cfg_btn_salvar"))
+        self.tabs.setTabText(0, idiomas.tr("cfg_tab_lic"))
+        self.tabs.setTabText(1, idiomas.tr("cfg_tab_ia"))
+        self.tabs.setTabText(2, idiomas.tr("cfg_tab_vis"))
+        self.btn_load_models.setText(idiomas.tr("cfg_btn_buscar"))
+        self.btn_load_cf.setText(idiomas.tr("cfg_btn_load_cf"))
+        self.combo_licenca.setItemText(0, idiomas.tr("lic_free"))
+        self.combo_licenca.setItemText(1, idiomas.tr("lic_byok"))
+        self.combo_licenca.setItemText(2, idiomas.tr("lic_saas"))
+        
+        self.combo_theme.setItemText(0, idiomas.tr("tema_escuro"))
+        self.combo_theme.setItemText(1, idiomas.tr("tema_claro"))
+
     def aplicar_zoom_ao_vivo(self, v):
         self.lbl_zoom_val.setText(f"{v}%")
         # Puxa o cordão da janela Pai e aplica o zoom na hora que deslizar!
@@ -927,7 +971,7 @@ class ConfigDialog(QDialog):
         self.btn_load_cf.setText("🔄 Carregar CF")
 
     def save_and_close(self):
-        licenca_escolhida = self.combo_licenca.currentText()
+        licenca_escolhida = self.combo_licenca.currentData()
         licenca_salva = self.config.get("license", "FREE")
         
         # 1. Barreira do BYOK (Com Reversão Automática Anti-Bypass)
@@ -975,8 +1019,9 @@ class ConfigDialog(QDialog):
 
         # Se passou e pagou (ou já tinha pago), salva limpo
         self.config["license"] = licenca_escolhida
-        self.config["theme"] = self.combo_theme.currentText()
+        self.config["theme"] = self.combo_theme.currentData()
         self.config["zoom"] = self.slider_zoom.value()
+        self.config["idioma"] = self.combo_idioma.currentData()
         
         self.config["provedor"] = "gemini" if self.chk_gemini.isChecked() else "cloudflare"
         self.config["api_key"] = self.txt_api_key.text().strip()
@@ -1112,7 +1157,11 @@ class AppPaiVega(QMainWindow):
         self.apply_zoom(self.config.get("zoom", 100))
         self.apply_theme()
         
+        import idiomas
+        idiomas.set_idioma(self.config.get("idioma", "pt"))
+        
         self.init_ui() # Agora todos os textos e botões já nascem do tamanho salvo!
+        self.atualizar_textos_ui() # Aciona a tradução pela primeira vez
         
         # Verifica se o atualizador deixou algum recado de novidades
         self.checar_notas_atualizacao()
@@ -1126,6 +1175,7 @@ class AppPaiVega(QMainWindow):
             "model": "gemini-2.5-flash", 
             "theme": "Escuro", 
             "zoom": 100,
+            "idioma": "pt",
             "saas_elite_ativo": False,
             "saas_padrao_ativo": False,
             "byok_ativo": False
@@ -1308,8 +1358,8 @@ class AppPaiVega(QMainWindow):
         
         # --- BLOCO DA IA COM TÍTULO E GATILHO ---
         vbox_tema = QVBoxLayout()
-        lbl_titulo_ia = QLabel("🧠 Motor de Criação por Inteligência Artificial:")
-        lbl_titulo_ia.setStyleSheet("font-weight: bold; font-size: 14px; color: #0078d7;")
+        self.lbl_titulo_ia = QLabel()
+        self.lbl_titulo_ia.setStyleSheet("font-weight: bold; font-size: 14px; color: #0078d7;")
         
         self.txt_tema = QTextEdit()
         self.txt_tema.setPlaceholderText("Digite o tema para a IA criar a apresentação...")
@@ -1317,7 +1367,7 @@ class AppPaiVega(QMainWindow):
         # O SEGREDO DO QTEXTEDIT: Tem que escutar o VIEWPORT, não o widget solto!
         self.txt_tema.viewport().installEventFilter(self) 
         
-        vbox_tema.addWidget(lbl_titulo_ia)
+        vbox_tema.addWidget(self.lbl_titulo_ia)
         vbox_tema.addWidget(self.txt_tema)
         
         self.btn_gerar_ia = QPushButton("Criar Apresentação\nAutomática (IA)")
@@ -1339,12 +1389,16 @@ class AppPaiVega(QMainWindow):
         # --- DROPDOWN DE PRESETS (ITEM 5) ---
         hbox_preset = QHBoxLayout()
         self.combo_presets = QComboBox()
-        self.combo_presets.addItems(["Personalizado (Manual)", "Corporativo Azul", "Dark Mode Clássico", "Minimalista Clean"])
+        self.combo_presets.addItem("Personalizado (Manual)")
+        self.combo_presets.addItem("Corporativo Azul")
+        self.combo_presets.addItem("Dark Mode Clássico")
+        self.combo_presets.addItem("Minimalista Clean")
         self.combo_presets.currentIndexChanged.connect(self.aplicar_preset)
         self.combo_presets.setCursor(Qt.PointingHandCursor)
         self.combo_presets.setStyleSheet("padding: 4px;") # Arrancado o font-size fixo!
         
-        hbox_preset.addWidget(QLabel("✨ Formatações Prontas (Presets):"))
+        self.lbl_presets = QLabel()
+        hbox_preset.addWidget(self.lbl_presets)
         hbox_preset.addWidget(self.combo_presets)
         hbox_preset.addStretch()
         self.main_layout.addLayout(hbox_preset)
@@ -1356,19 +1410,21 @@ class AppPaiVega(QMainWindow):
         self.btn_color_title.clicked.connect(self.choose_title_color)
         self.lbl_color_title_indicator = self.create_color_indicator()
         
-        hbox_color_title.addWidget(QLabel("2. Cor dos Títulos:"))
+        self.lbl_cor_titulos = QLabel()
+        hbox_color_title.addWidget(self.lbl_cor_titulos)
         hbox_color_title.addWidget(self.btn_color_title)
         hbox_color_title.addWidget(self.lbl_color_title_indicator)
         hbox_color_title.addStretch()
         self.main_layout.addLayout(hbox_color_title)
 
         hbox_color_body = QHBoxLayout()
-        self.btn_color_body = QPushButton("🎨 Cor dos Textos (Corpo/Cards)")
+        self.btn_color_body = QPushButton()
         self.btn_color_body.setCursor(Qt.PointingHandCursor)
         self.btn_color_body.clicked.connect(self.choose_body_color)
         self.lbl_color_body_indicator = self.create_color_indicator()
         
-        hbox_color_body.addWidget(QLabel("2.1. Cor dos Textos:"))
+        self.lbl_cor_textos = QLabel()
+        hbox_color_body.addWidget(self.lbl_cor_textos)
         hbox_color_body.addWidget(self.btn_color_body)
         hbox_color_body.addWidget(self.lbl_color_body_indicator)
         hbox_color_body.addStretch()
@@ -1381,16 +1437,16 @@ class AppPaiVega(QMainWindow):
         # FONTE DOS TÍTULOS
         hbox_font_title = QHBoxLayout()
         self.combo_font_title = QComboBox()
-        self.combo_font_title.addItems(fontes_comuns)
-        self.combo_font_title.setCursor(Qt.PointingHandCursor)
         for i, nome_fonte in enumerate(fontes_comuns):
-            if nome_fonte != "Padrão do Tema":
+            self.combo_font_title.addItem(nome_fonte, nome_fonte)
+            if i > 0: # 0 é o Padrão
                 self.combo_font_title.setItemData(i, QFont(nome_fonte), Qt.FontRole)
+        self.combo_font_title.setCursor(Qt.PointingHandCursor)
 
         self.lbl_font_title_preview = QLabel("Aa Título")
         self.lbl_font_title_preview.setStyleSheet("font-size: 18px; color: gray; font-weight: bold;")
-        self.combo_font_title.currentTextChanged.connect(
-            lambda f: self.lbl_font_title_preview.setStyleSheet(f"font-size: 18px; font-family: '{f}'; font-weight: bold; color: #0078d7;") if f != "Padrão do Tema" else self.lbl_font_title_preview.setStyleSheet("font-size: 18px; color: gray; font-weight: bold;")
+        self.combo_font_title.currentIndexChanged.connect(
+            lambda idx: self.lbl_font_title_preview.setStyleSheet(f"font-size: 18px; font-family: '{self.combo_font_title.itemData(idx)}'; font-weight: bold; color: #0078d7;") if idx != 0 else self.lbl_font_title_preview.setStyleSheet("font-size: 18px; color: gray; font-weight: bold;")
         )
         
         self.btn_add_font = QPushButton("➕ Nova Fonte")
@@ -1398,7 +1454,8 @@ class AppPaiVega(QMainWindow):
         self.btn_add_font.clicked.connect(self.adicionar_fonte_customizada)
         self.btn_add_font.setStyleSheet("padding: 4px; font-weight: bold;")
 
-        hbox_font_title.addWidget(QLabel("📝 Fonte dos Títulos:"))
+        self.lbl_fonte_titulos = QLabel()
+        hbox_font_title.addWidget(self.lbl_fonte_titulos)
         hbox_font_title.addWidget(self.combo_font_title)
         hbox_font_title.addWidget(self.btn_add_font)
         hbox_font_title.addWidget(self.lbl_font_title_preview)
@@ -1408,23 +1465,24 @@ class AppPaiVega(QMainWindow):
         # FONTE DOS TEXTOS (CORPO)
         hbox_font_body = QHBoxLayout()
         self.combo_font_body = QComboBox()
-        self.combo_font_body.addItems(fontes_comuns)
-        self.combo_font_body.setCursor(Qt.PointingHandCursor)
         for i, nome_fonte in enumerate(fontes_comuns):
-            if nome_fonte != "Padrão do Tema":
+            self.combo_font_body.addItem(nome_fonte, nome_fonte)
+            if i > 0:
                 self.combo_font_body.setItemData(i, QFont(nome_fonte), Qt.FontRole)
+        self.combo_font_body.setCursor(Qt.PointingHandCursor)
                 
         # Avisa o mini-slide quando o usuário trocar as fontes
-        self.combo_font_title.currentTextChanged.connect(self.atualizar_preview_real)
-        self.combo_font_body.currentTextChanged.connect(self.atualizar_preview_real)
+        self.combo_font_title.currentIndexChanged.connect(self.atualizar_preview_real)
+        self.combo_font_body.currentIndexChanged.connect(self.atualizar_preview_real)
 
         self.lbl_font_body_preview = QLabel("Aa Corpo")
         self.lbl_font_body_preview.setStyleSheet("font-size: 14px; color: gray;")
-        self.combo_font_body.currentTextChanged.connect(
-            lambda f: self.lbl_font_body_preview.setStyleSheet(f"font-size: 14px; font-family: '{f}'; color: #0078d7;") if f != "Padrão do Tema" else self.lbl_font_body_preview.setStyleSheet("font-size: 14px; color: gray;")
+        self.combo_font_body.currentIndexChanged.connect(
+            lambda idx: self.lbl_font_body_preview.setStyleSheet(f"font-size: 14px; font-family: '{self.combo_font_body.itemData(idx)}'; color: #0078d7;") if idx != 0 else self.lbl_font_body_preview.setStyleSheet("font-size: 14px; color: gray;")
         )
         
-        hbox_font_body.addWidget(QLabel("📝 Fonte dos Textos:"))
+        self.lbl_fonte_textos = QLabel()
+        hbox_font_body.addWidget(self.lbl_fonte_textos)
         hbox_font_body.addWidget(self.combo_font_body)
         hbox_font_body.addWidget(self.lbl_font_body_preview)
         hbox_font_body.addStretch()
@@ -1568,18 +1626,59 @@ class AppPaiVega(QMainWindow):
         
         self.update_main_ui_lock()   
 
+    def atualizar_textos_ui(self):
+        import idiomas
+        self.btn_tutorial.setText(idiomas.tr("btn_tutorial"))
+        self.btn_config.setText(idiomas.tr("btn_config"))
+        self.btn_novidades.setText(idiomas.tr("btn_novidades"))
+        self.btn_load.setText(idiomas.tr("btn_load"))
+        if not self.pptx_path: self.lbl_pptx.setText(idiomas.tr("lbl_pptx_vazio"))
+        self.lbl_titulo_ia.setText(idiomas.tr("lbl_titulo_ia"))
+        self.btn_gerar_ia.setText(idiomas.tr("btn_ia"))
+        self.btn_historico.setText(idiomas.tr("btn_historico"))
+        self.lbl_presets.setText(idiomas.tr("lbl_presets"))
+        self.lbl_cor_titulos.setText(idiomas.tr("lbl_cor_titulos"))
+        self.btn_color_title.setText(idiomas.tr("btn_cor_titulos_btn"))
+        self.lbl_cor_textos.setText(idiomas.tr("lbl_cor_textos"))
+        self.btn_color_body.setText(idiomas.tr("btn_cor_textos_btn"))
+        self.btn_add_font.setText(idiomas.tr("btn_add_font"))
+        self.lbl_fonte_titulos.setText(idiomas.tr("lbl_fonte_titulos"))
+        self.lbl_fonte_textos.setText(idiomas.tr("lbl_fonte_textos"))
+        self.btn_fill_color.setText(idiomas.tr("btn_fill_color"))
+        self.btn_bg.setText(idiomas.tr("btn_bg"))
+        if not self.bg_path: self.lbl_bg_preview.setText(idiomas.tr("lbl_bg_preview"))
+        self.chk_scale.setText(idiomas.tr("chk_scale"))
+        self.chk_text_scale.setText(idiomas.tr("chk_text_scale"))
+        self.chk_notes.setText(idiomas.tr("chk_notes"))
+        self.chk_barra_lateral.setText(idiomas.tr("chk_barra_lateral"))
+        self.btn_save.setText(idiomas.tr("btn_save"))
+        self.btn_pdf.setText(idiomas.tr("btn_pdf"))
+        
+        # Traduz as opções do ComboBox de Presets
+        self.combo_presets.setItemText(0, idiomas.tr("preset_manual"))
+        self.combo_presets.setItemText(1, idiomas.tr("preset_corp"))
+        self.combo_presets.setItemText(2, idiomas.tr("preset_dark"))
+        self.combo_presets.setItemText(3, idiomas.tr("preset_clean"))
+
+        # Traduz a opção "Padrão do Tema" nos dois ComboBoxes de Fonte
+        self.combo_font_title.setItemText(0, idiomas.tr("font_default"))
+        self.combo_font_body.setItemText(0, idiomas.tr("font_default"))
+
+        self.update_main_ui_lock()
+        self.atualizar_preview_real()
+
     def update_main_ui_lock(self):
-        # AQUI FOI CORRIGIDO O BUG: Agora ele verifica se a palavra FREE está DENTRO da string!
+        import idiomas
         if "FREE" in self.config.get("license", "FREE"):
             self.txt_tema.setReadOnly(True)
-            self.txt_tema.setPlaceholderText("🔒 Geração Inteligente bloqueada (Licença FREE). Clique aqui para assinar.")
+            self.txt_tema.setPlaceholderText(idiomas.tr("txt_tema_lock"))
             self.txt_tema.setStyleSheet("background-color: #444; color: #888; border: 1px solid #333;")
             
             self.btn_gerar_ia.setEnabled(False)
             self.btn_gerar_ia.setStyleSheet("background-color: #555; color: #888; font-weight: bold; padding: 10px;")
         else:
             self.txt_tema.setReadOnly(False)
-            self.txt_tema.setPlaceholderText("Digite o tema para a IA criar a apresentação do zero...")
+            self.txt_tema.setPlaceholderText(idiomas.tr("txt_tema_placeholder"))
             self.txt_tema.setStyleSheet("") 
             
             self.btn_gerar_ia.setEnabled(True)
@@ -1602,11 +1701,11 @@ class AppPaiVega(QMainWindow):
             
     def atualizar_preview_real(self, *args):
         # --- 1. CAPTURAR AS FONTES E CORES ATUAIS ---
-        fonte_titulo = self.combo_font_title.currentText()
-        fonte_corpo = self.combo_font_body.currentText()
+        fonte_titulo = self.combo_font_title.currentData()
+        fonte_corpo = self.combo_font_body.currentData()
         
-        fam_titulo = f"font-family: '{fonte_titulo}';" if fonte_titulo != "Padrão do Tema" else ""
-        fam_corpo = f"font-family: '{fonte_corpo}';" if fonte_corpo != "Padrão do Tema" else ""
+        fam_titulo = f"font-family: '{fonte_titulo}';" if self.combo_font_title.currentIndex() != 0 else ""
+        fam_corpo = f"font-family: '{fonte_corpo}';" if self.combo_font_body.currentIndex() != 0 else ""
         
         # --- 1. CAPTURAR AS CORES SEPARADAS (ITEM 3) ---
         cor_titulo = f"color: {self.text_color_title.name()};" if self.text_color_title else "color: #1e3c5a;"
@@ -1619,13 +1718,14 @@ class AppPaiVega(QMainWindow):
         else:
             new_px = base_px
             
+        import idiomas
         # O truque sujo: Usar HTML no widget nativo para separar Título do Corpo perfeitamente
         html_texto = f"""
         <div style="{fam_titulo} font-size: {new_px + 4}px; font-weight: bold; {cor_titulo} margin-bottom: 5px;">
-            Título Exemplo
+            {idiomas.tr("lbl_preview_text_title")}
         </div>
         <div style="{fam_corpo} font-size: {new_px}px; {cor_corpo}">
-            Este é o corpo do texto.<br>Veja como ele cresce e muda.
+            {idiomas.tr("lbl_preview_text_body")}
         </div>
         """
         self.lbl_preview_text.setText(html_texto)
@@ -1706,18 +1806,18 @@ class AppPaiVega(QMainWindow):
             self.atualizar_preview_real() # Avisa o mini-slide imediatamente
             
     def aplicar_preset(self):
-        preset = self.combo_presets.currentText()
-        if preset == "Personalizado (Manual)": return
+        idx = self.combo_presets.currentIndex()
+        if idx == 0: return # Personalizado
             
-        if preset == "Corporativo Azul":
+        if idx == 1: # Corporativo Azul
             self.text_color_title = QColor(30, 60, 90)
             self.text_color_body = QColor(40, 50, 60)
             self.fill_color = QColor(240, 248, 255)
-        elif preset == "Dark Mode Clássico":
+        elif idx == 2: # Dark Mode Clássico
             self.text_color_title = QColor(255, 255, 255)
             self.text_color_body = QColor(220, 220, 220)
             self.fill_color = QColor(45, 45, 45)
-        elif preset == "Minimalista Clean":
+        elif idx == 3: # Minimalista Clean
             self.text_color_title = QColor(0, 0, 0)
             self.text_color_body = QColor(50, 50, 50)
             self.fill_color = QColor(255, 255, 255)
@@ -2211,23 +2311,15 @@ class AppPaiVega(QMainWindow):
             
     def abrir_tutorial(self):
         from PySide6.QtCore import QPoint
+        import idiomas
         
         # Estrutura da Mágica: (Widget Alvo, Direção da Seta, Título, Texto)
         passos = [
-            (self.txt_tema, "cima", "Passo 1: O Início e as Licenças", 
-             "Bem-vindo ao SmartSlides Pro!\n\nVocê tem dois caminhos:\n1. Digite um tema na caixa acima e deixe a IA criar a apresentação do zero.\n\n⚠️ ATENÇÃO: A Inteligência Artificial é um recurso PREMIUM. No plano FREE (Grátis), a IA não funciona e o botão fica bloqueado! Você precisa ativar o plano SAAS ou colocar sua chave BYOK no botão '⚙️ Configurações / Licença' lá no topo.\n\n2. Se você já tem um PPTX pronto e só quer maquiá-lo, use o 'Botão 1' lá em cima."),
-            
-            (None, "centro", "Passo 2: As Imagens", 
-             "Após a IA pensar, uma nova janela vai se abrir.\n\nNela, você escolherá as fotos sugeridas para cada slide. Se não quiser foto em algum slide, marque a opção 'Não usar imagem'. Só depois de confirmar as fotos é que a apresentação nasce!"),
-            
-            (self.combo_presets, "esquerda", "Passo 3: A Maquiagem", 
-             "Aqui começa o design da sua apresentação.\n\n- Use esta caixa ao lado para aplicar Formatações Prontas (Presets).\n- Ou, logo abaixo, mude manualmente a Cor do Texto, a Cor de Fundo e as Fontes dos Títulos e do Corpo."),
-            
-            (self.slider_scale, "baixo", "Passo 4: Os Ajustes Finos", 
-             "Veja as caixinhas e sliders abaixo!\n\nUse-os para diminuir o tamanho das fotos ou aumentar o tamanho das letras. \n\nLembre-se: Você precisa marcar a caixinha (Checkbox) para destrancar o slider. Olhe para o Mini-Slide no rodapé, ele mostra a mágica acontecendo em tempo real!"),
-            
-            (self.btn_save, "baixo", "Passo 5: O Grande Final", 
-             "Tudo pronto?\n\nClique no botão cinza escuro abaixo ('Processar Apresentação e Salvar'). O aplicativo vai aplicar todas as cores, fontes e recortes que você escolheu e gerar o seu arquivo PPTX final na hora.\n\nPronto! Já pode ir pro palco.")
+            (self.txt_tema, "cima", idiomas.tr("tut_p1_tit"), idiomas.tr("tut_p1_txt")),
+            (None, "centro", idiomas.tr("tut_p2_tit"), idiomas.tr("tut_p2_txt")),
+            (self.combo_presets, "esquerda", idiomas.tr("tut_p3_tit"), idiomas.tr("tut_p3_txt")),
+            (self.slider_scale, "baixo", idiomas.tr("tut_p4_tit"), idiomas.tr("tut_p4_txt")),
+            (self.btn_save, "baixo", idiomas.tr("tut_p5_tit"), idiomas.tr("tut_p5_txt"))
         ]
         
         for alvo, direcao, titulo, texto in passos:
@@ -2239,24 +2331,24 @@ class AppPaiVega(QMainWindow):
             layout = QVBoxLayout(dialog)
             
             seta = ""
-            if direcao == "esquerda": seta = "⬅️ OLHE PARA A ESQUERDA\n\n"
-            elif direcao == "cima": seta = "⬆️ OLHE PARA A CAIXA ACIMA\n\n"
-            elif direcao == "baixo": seta = "⬇️ OLHE PARA OS BOTÕES ABAIXO\n\n"
+            if direcao == "esquerda": seta = idiomas.tr("tut_olhe_esq")
+            elif direcao == "cima": seta = idiomas.tr("tut_olhe_cima")
+            elif direcao == "baixo": seta = idiomas.tr("tut_olhe_baixo")
             
             # Formatação HTML para a seta ficar vermelha e gigante
             lbl_texto = QLabel(f"<b><span style='color:#d9534f; font-size:18px;'>{seta}</span></b>{texto}")
             lbl_texto.setWordWrap(True)
-            lbl_texto.setStyleSheet("font-size: 14px; color: #333;")
+            lbl_texto.setStyleSheet("font-size: 14px;")
             lbl_texto.setMinimumWidth(350)
             layout.addWidget(lbl_texto)
             
             hbox_botoes = QHBoxLayout()
-            btn_sair = QPushButton("❌ Sair do Tutorial")
+            btn_sair = QPushButton(idiomas.tr("tut_btn_sair"))
             btn_sair.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 10px; border-radius: 4px;")
             btn_sair.setCursor(Qt.PointingHandCursor)
             btn_sair.clicked.connect(dialog.reject)
             
-            btn_ok = QPushButton("Entendi, Próximo ➔" if titulo != passos[-1][2] else "Concluir Tutorial ✔️")
+            btn_ok = QPushButton(idiomas.tr("tut_btn_prox") if titulo != passos[-1][2] else idiomas.tr("tut_btn_fim"))
             btn_ok.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 10px; border-radius: 4px;")
             btn_ok.setCursor(Qt.PointingHandCursor)
             btn_ok.clicked.connect(dialog.accept)
@@ -2314,8 +2406,9 @@ class AppPaiVega(QMainWindow):
             self.save_config()
             
     def abrir_novidades(self):
+        import idiomas
         # BUSCA AO VIVO NO BACKEND DO MASTER
-        self.btn_novidades.setText("⏳ Buscando...")
+        self.btn_novidades.setText(idiomas.tr("btn_buscando"))
         self.btn_novidades.setEnabled(False)
         QApplication.processEvents()
         
@@ -2335,7 +2428,8 @@ class AppPaiVega(QMainWindow):
         except Exception as e:
             notas = f"Falha de conexão com a Nave-Mãe:\n{e}"
         finally:
-            self.btn_novidades.setText("📋 Novidades")
+            import idiomas
+            self.btn_novidades.setText(idiomas.tr("btn_novidades"))
             self.btn_novidades.setEnabled(True)
 
         # ========================================================
