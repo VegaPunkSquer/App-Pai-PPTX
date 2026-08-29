@@ -1090,7 +1090,8 @@ class WorkerIAGerador(QThread):
 class NovidadesDialog(QDialog):
     def __init__(self, versao, texto, zoom_atual=100, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"📋 Novidades - SmartSlides Pro ({versao})")
+        import idiomas
+        self.setWindowTitle(idiomas.tr("nov_janela").format(versao))
         
         # MÁGICA: A largura se adapta ao zoom para não esmagar o texto gigante!
         nova_largura = int(650 * (zoom_atual / 100.0))
@@ -1098,7 +1099,7 @@ class NovidadesDialog(QDialog):
         
         layout = QVBoxLayout(self)
         
-        lbl_titulo = QLabel(f"<b>O que há de novo na versão {versao}:</b>")
+        lbl_titulo = QLabel(idiomas.tr("nov_header").format(versao))
         lbl_titulo.setStyleSheet("font-size: 16px;")
         layout.addWidget(lbl_titulo)
         
@@ -1121,7 +1122,7 @@ class NovidadesDialog(QDialog):
         scroll.setWidget(conteudo)
         layout.addWidget(scroll)
         
-        btn_ok = QPushButton("Entendi")
+        btn_ok = QPushButton(idiomas.tr("nov_btn_ok"))
         btn_ok.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 10px;")
         btn_ok.setCursor(Qt.PointingHandCursor)
         btn_ok.clicked.connect(self.accept)
@@ -2395,9 +2396,10 @@ class AppPaiVega(QMainWindow):
             versao_real = VERSAO_ATUAL
             
         if ultima_vista != versao_real:
+            import idiomas
             msg = QMessageBox(self)
-            msg.setWindowTitle(f"🚀 Aplicativo Atualizado ({versao_real})!")
-            msg.setText(f"<b>O SmartSlides Pro foi atualizado para a versão {versao_real}!</b>\n\nClique no botão '📋 Novidades' no topo da tela para ver todos os detalhes das melhorias baixadas diretamente do servidor.")
+            msg.setWindowTitle(idiomas.tr("msg_update_titulo").format(versao_real))
+            msg.setText(idiomas.tr("msg_update_texto").format(versao_real))
             msg.setIcon(QMessageBox.Information)
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec()
@@ -2418,15 +2420,25 @@ class AppPaiVega(QMainWindow):
             versao_nuvem = VERSAO_ATUAL
             if resposta.status_code == 200:
                 dados = resposta.json()
-                notas = dados.get("notas_atualizacao", "").strip()
+                
+                import idiomas
+                if idiomas._idioma_atual == "en":
+                    notas = dados.get("notas_atualizacao_en", "")
+                else:
+                    notas = dados.get("notas_atualizacao", "")
+                    
+                notas = notas.strip() if notas else ""
+                
                 # PEGA A VERSÃO REAL DA API PARA O TÍTULO BATER COM O TEXTO!
                 versao_nuvem = dados.get("versao_atual", VERSAO_ATUAL)
                 if not notas:
-                    notas = "Sem novidades registradas para esta versão no servidor."
+                    notas = idiomas.tr("msg_update_vazio")
             else:
-                notas = "Não foi possível resgatar as novidades do servidor no momento."
+                import idiomas
+                notas = idiomas.tr("msg_update_erro_api")
         except Exception as e:
-            notas = f"Falha de conexão com a Nave-Mãe:\n{e}"
+            import idiomas
+            notas = idiomas.tr("msg_update_erro_con").format(e)
         finally:
             import idiomas
             self.btn_novidades.setText(idiomas.tr("btn_novidades"))
