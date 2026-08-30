@@ -2441,24 +2441,27 @@ class AppPaiVega(QMainWindow):
     def abrir_tutorial(self):
         import idiomas
         
-        # Estrutura da Mágica Completa: (Widget Alvo, Título, Texto)
+        # Estrutura da Mágica Definitiva: (Widget Alvo, Título, Texto)
         passos = [
             (self.btn_config, idiomas.tr("tut_p1_tit"), idiomas.tr("tut_p1_txt")),
             (self.btn_novidades, idiomas.tr("tut_p2_tit"), idiomas.tr("tut_p2_txt")),
             (self.btn_load, idiomas.tr("tut_p3_tit"), idiomas.tr("tut_p3_txt")),
             (self.txt_tema, idiomas.tr("tut_p4_tit"), idiomas.tr("tut_p4_txt")),
-            (self.btn_historico, idiomas.tr("tut_p5_tit"), idiomas.tr("tut_p5_txt")),
-            (self.combo_presets, idiomas.tr("tut_p6_tit"), idiomas.tr("tut_p6_txt")),
-            (self.btn_color_title, idiomas.tr("tut_p7_tit"), idiomas.tr("tut_p7_txt")),
-            (self.btn_color_body, idiomas.tr("tut_p8_tit"), idiomas.tr("tut_p8_txt")),
-            (self.btn_fill_color, idiomas.tr("tut_p9_tit"), idiomas.tr("tut_p9_txt")),
-            (self.btn_bg, idiomas.tr("tut_p10_tit"), idiomas.tr("tut_p10_txt")),
-            (self.chk_scale, idiomas.tr("tut_p11_tit"), idiomas.tr("tut_p11_txt")),
-            (self.chk_text_scale, idiomas.tr("tut_p12_tit"), idiomas.tr("tut_p12_txt")),
-            (self.frame_preview, idiomas.tr("tut_p13_tit"), idiomas.tr("tut_p13_txt")),
-            (self.chk_notes, idiomas.tr("tut_p14_tit"), idiomas.tr("tut_p14_txt")),
-            (self.btn_save, idiomas.tr("tut_p15_tit"), idiomas.tr("tut_p15_txt")),
-            (self.btn_pdf, idiomas.tr("tut_p16_tit"), idiomas.tr("tut_p16_txt"))
+            (None, idiomas.tr("tut_p5_tit"), idiomas.tr("tut_p5_txt")), # Janela de Imagens
+            (self.btn_historico, idiomas.tr("tut_p6_tit"), idiomas.tr("tut_p6_txt")),
+            (self.combo_presets, idiomas.tr("tut_p7_tit"), idiomas.tr("tut_p7_txt")),
+            (self.btn_color_title, idiomas.tr("tut_p8_tit"), idiomas.tr("tut_p8_txt")),
+            (self.combo_font_title, idiomas.tr("tut_p9_tit"), idiomas.tr("tut_p9_txt")),
+            (self.btn_color_body, idiomas.tr("tut_p10_tit"), idiomas.tr("tut_p10_txt")),
+            (self.combo_font_body, idiomas.tr("tut_p11_tit"), idiomas.tr("tut_p11_txt")),
+            (self.btn_fill_color, idiomas.tr("tut_p12_tit"), idiomas.tr("tut_p12_txt")),
+            (self.btn_bg, idiomas.tr("tut_p13_tit"), idiomas.tr("tut_p13_txt")),
+            (self.chk_scale, idiomas.tr("tut_p14_tit"), idiomas.tr("tut_p14_txt")),
+            (self.chk_text_scale, idiomas.tr("tut_p15_tit"), idiomas.tr("tut_p15_txt")),
+            (self.frame_preview, idiomas.tr("tut_p16_tit"), idiomas.tr("tut_p16_txt")),
+            (self.chk_notes, idiomas.tr("tut_p17_tit"), idiomas.tr("tut_p17_txt")),
+            (self.btn_save, idiomas.tr("tut_p18_tit"), idiomas.tr("tut_p18_txt")),
+            (self.btn_pdf, idiomas.tr("tut_p19_tit"), idiomas.tr("tut_p19_txt"))
         ]
         
         self.overlay_tutorial.iniciar(passos)
