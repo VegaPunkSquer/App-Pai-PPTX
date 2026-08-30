@@ -117,8 +117,8 @@ from PySide6.QtWidgets import (
     QCheckBox, QSpinBox, QTextEdit, QScrollArea, QListWidget, QSlider, QProgressDialog,
     QTabWidget, QComboBox, QLineEdit, QInputDialog
 )
-from PySide6.QtGui import QColor, QFont, QPalette, QIcon
-from PySide6.QtCore import QThread, QSize, Signal
+from PySide6.QtGui import QColor, QFont, QPalette, QIcon, QPainter, QPen
+from PySide6.QtCore import QThread, QSize, Signal, QPoint, QRect
 
 if splash: splash.atualizar(40, "Carregando motor do PowerPoint (isso leva uns segundos)...")
 from pptx import Presentation
@@ -1128,6 +1128,131 @@ class NovidadesDialog(QDialog):
         btn_ok.clicked.connect(self.accept)
         layout.addWidget(btn_ok)
 
+# --- O MOTOR DO TUTORIAL (OVERLAY DE DESFOQUE) ---
+class TutorialOverlay(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.passos = []
+        self.passo_atual = 0
+        
+        # CRUCIAL: Bloqueia cliques para a interface, e permite transparência verdadeira
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.hide()
+
+        self.lbl_titulo = QLabel(self)
+        self.lbl_titulo.setStyleSheet("color: #ffc107; font-weight: 900; font-size: 24px; background-color: transparent;")
+        
+        self.lbl_texto = QLabel(self)
+        self.lbl_texto.setStyleSheet("color: white; font-size: 16px; font-weight: 500; background-color: transparent;")
+        self.lbl_texto.setWordWrap(True)
+
+        self.btn_next = QPushButton(self)
+        self.btn_next.setCursor(Qt.PointingHandCursor)
+        self.btn_next.clicked.connect(self.avancar)
+
+        self.btn_close = QPushButton(self)
+        self.btn_close.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 10px 20px; border-radius: 6px; font-size: 14px; border: 2px solid white;")
+        self.btn_close.setCursor(Qt.PointingHandCursor)
+        self.btn_close.clicked.connect(self.encerrar)
+
+    def iniciar(self, passos):
+        import idiomas
+        self.btn_close.setText(idiomas.tr("tut_btn_sair"))
+        self.passos = passos
+        self.passo_atual = 0
+        self.setGeometry(0, 0, self.parentWidget().width(), self.parentWidget().height())
+        self.show()
+        self.raise_() # Joga por cima de TUDO
+        self.atualizar_passo()
+
+    def avancar(self):
+        self.passo_atual += 1
+        if self.passo_atual >= len(self.passos):
+            self.encerrar()
+        else:
+            self.atualizar_passo()
+
+    def encerrar(self):
+        self.hide()
+
+    def atualizar_passo(self):
+        alvo, titulo, texto = self.passos[self.passo_atual]
+        
+        import idiomas
+        self.lbl_titulo.setText(titulo)
+        self.lbl_texto.setText(texto)
+        self.btn_next.setText(idiomas.tr("tut_btn_fim") if self.passo_atual == len(self.passos) - 1 else idiomas.tr("tut_btn_prox"))
+        self.btn_next.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 10px 20px; border-radius: 6px; font-size: 14px; border: 2px solid white;" if self.passo_atual == len(self.passos) - 1 else "background-color: #0078d7; color: white; font-weight: bold; padding: 10px 20px; border-radius: 6px; font-size: 14px; border: 2px solid white;")
+
+        if alvo:
+            # A MÁGICA 1: Rola a tela até o alvo sozinho!
+            scroll = self.parentWidget().scroll_principal
+            scroll.ensureWidgetVisible(alvo, 50, 50)
+            QApplication.processEvents() # Dá tempo pro PySide6 calcular a barra de rolagem
+
+        self.posicionar_ui()
+        self.update() # Força o paintEvent (recorte do buraco)
+
+    def posicionar_ui(self):
+        self.lbl_texto.setFixedWidth(400)
+        self.lbl_titulo.adjustSize()
+        self.lbl_texto.adjustSize()
+        self.btn_next.adjustSize()
+        self.btn_close.adjustSize()
+
+        alvo = self.passos[self.passo_atual][0]
+        
+        y_caixa = 80
+        if alvo:
+            pos_global = alvo.mapToGlobal(QPoint(0, 0))
+            pos_alvo = self.mapFromGlobal(pos_global)
+            # Se o alvo tá do meio pra cima, jogamos a explicação pra baixo. Vice-versa.
+            if pos_alvo.y() < self.height() / 2:
+                y_caixa = self.height() - self.lbl_texto.height() - 120
+            else:
+                y_caixa = 80
+
+        cx = (self.width() - 400) // 2
+        self.lbl_titulo.move(cx, y_caixa)
+        self.lbl_texto.move(cx, y_caixa + self.lbl_titulo.height() + 15)
+        
+        y_botoes = self.lbl_texto.y() + self.lbl_texto.height() + 25
+        self.btn_close.move(cx, y_botoes)
+        self.btn_next.move(cx + self.btn_close.width() + 15, y_botoes)
+
+    def paintEvent(self, event):
+        from PySide6.QtGui import QPainterPath
+        from PySide6.QtCore import Qt, QPoint, QRect
+        
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        alvo = self.passos[self.passo_atual][0]
+        rect = None
+
+        if alvo:
+            # Cálculo ABSOLUTO para ignorar o bug do scroll
+            pos_global = alvo.mapToGlobal(QPoint(0, 0))
+            pos = self.mapFromGlobal(pos_global)
+            rect = QRect(pos, alvo.size())
+            rect.adjust(-10, -10, 10, 10) # Margem de respiro pro widget brilhar
+
+        # A MÁGICA DEFINITIVA: QPainterPath com regra OddEven
+        path = QPainterPath()
+        path.addRect(self.rect()) # Adiciona a tela toda
+        if rect:
+            path.addRoundedRect(rect, 8, 8) # Adiciona o buraco dentro
+
+        # Preenche tudo com preto 85%, exceto o buraco!
+        painter.fillPath(path, QColor(0, 0, 0, 220))
+
+        # Desenha a borda neon por cima
+        if rect:
+            pen = QPen(QColor("#ffc107"), 3, Qt.DashLine)
+            painter.setPen(pen)
+            painter.drawRoundedRect(rect, 8, 8)
+
 # --- APLICATIVO PRINCIPAL ---
 class AppPaiVega(QMainWindow):
     def __init__(self):
@@ -1163,6 +1288,9 @@ class AppPaiVega(QMainWindow):
         
         self.init_ui() # Agora todos os textos e botões já nascem do tamanho salvo!
         self.atualizar_textos_ui() # Aciona a tradução pela primeira vez
+        
+        # Instancia o buraco negro invisível por cima da UI
+        self.overlay_tutorial = TutorialOverlay(self)
         
         # Verifica se o atualizador deixou algum recado de novidades
         self.checar_notas_atualizacao()
@@ -2311,77 +2439,36 @@ class AppPaiVega(QMainWindow):
             QMessageBox.critical(self, "Erro", f"Erro ao processar arquivo:\n{str(e)}")
             
     def abrir_tutorial(self):
-        from PySide6.QtCore import QPoint
         import idiomas
         
-        # Estrutura da Mágica: (Widget Alvo, Direção da Seta, Título, Texto)
+        # Estrutura da Mágica Completa: (Widget Alvo, Título, Texto)
         passos = [
-            (self.txt_tema, "cima", idiomas.tr("tut_p1_tit"), idiomas.tr("tut_p1_txt")),
-            (None, "centro", idiomas.tr("tut_p2_tit"), idiomas.tr("tut_p2_txt")),
-            (self.combo_presets, "esquerda", idiomas.tr("tut_p3_tit"), idiomas.tr("tut_p3_txt")),
-            (self.slider_scale, "baixo", idiomas.tr("tut_p4_tit"), idiomas.tr("tut_p4_txt")),
-            (self.btn_save, "baixo", idiomas.tr("tut_p5_tit"), idiomas.tr("tut_p5_txt"))
+            (self.btn_config, idiomas.tr("tut_p1_tit"), idiomas.tr("tut_p1_txt")),
+            (self.btn_novidades, idiomas.tr("tut_p2_tit"), idiomas.tr("tut_p2_txt")),
+            (self.btn_load, idiomas.tr("tut_p3_tit"), idiomas.tr("tut_p3_txt")),
+            (self.txt_tema, idiomas.tr("tut_p4_tit"), idiomas.tr("tut_p4_txt")),
+            (self.btn_historico, idiomas.tr("tut_p5_tit"), idiomas.tr("tut_p5_txt")),
+            (self.combo_presets, idiomas.tr("tut_p6_tit"), idiomas.tr("tut_p6_txt")),
+            (self.btn_color_title, idiomas.tr("tut_p7_tit"), idiomas.tr("tut_p7_txt")),
+            (self.btn_color_body, idiomas.tr("tut_p8_tit"), idiomas.tr("tut_p8_txt")),
+            (self.btn_fill_color, idiomas.tr("tut_p9_tit"), idiomas.tr("tut_p9_txt")),
+            (self.btn_bg, idiomas.tr("tut_p10_tit"), idiomas.tr("tut_p10_txt")),
+            (self.chk_scale, idiomas.tr("tut_p11_tit"), idiomas.tr("tut_p11_txt")),
+            (self.chk_text_scale, idiomas.tr("tut_p12_tit"), idiomas.tr("tut_p12_txt")),
+            (self.frame_preview, idiomas.tr("tut_p13_tit"), idiomas.tr("tut_p13_txt")),
+            (self.chk_notes, idiomas.tr("tut_p14_tit"), idiomas.tr("tut_p14_txt")),
+            (self.btn_save, idiomas.tr("tut_p15_tit"), idiomas.tr("tut_p15_txt")),
+            (self.btn_pdf, idiomas.tr("tut_p16_tit"), idiomas.tr("tut_p16_txt"))
         ]
         
-        for alvo, direcao, titulo, texto in passos:
-            dialog = QDialog(self)
-            dialog.setWindowTitle(titulo)
-            # Remove o botão de Fechar (X) da janela para forçar a leitura
-            dialog.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint)
-            
-            layout = QVBoxLayout(dialog)
-            
-            seta = ""
-            if direcao == "esquerda": seta = idiomas.tr("tut_olhe_esq")
-            elif direcao == "cima": seta = idiomas.tr("tut_olhe_cima")
-            elif direcao == "baixo": seta = idiomas.tr("tut_olhe_baixo")
-            
-            # Formatação HTML para a seta ficar vermelha e gigante
-            lbl_texto = QLabel(f"<b><span style='color:#d9534f; font-size:18px;'>{seta}</span></b>{texto}")
-            lbl_texto.setWordWrap(True)
-            lbl_texto.setStyleSheet("font-size: 14px;")
-            lbl_texto.setMinimumWidth(350)
-            layout.addWidget(lbl_texto)
-            
-            hbox_botoes = QHBoxLayout()
-            btn_sair = QPushButton(idiomas.tr("tut_btn_sair"))
-            btn_sair.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 10px; border-radius: 4px;")
-            btn_sair.setCursor(Qt.PointingHandCursor)
-            btn_sair.clicked.connect(dialog.reject)
-            
-            btn_ok = QPushButton(idiomas.tr("tut_btn_prox") if titulo != passos[-1][2] else idiomas.tr("tut_btn_fim"))
-            btn_ok.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 10px; border-radius: 4px;")
-            btn_ok.setCursor(Qt.PointingHandCursor)
-            btn_ok.clicked.connect(dialog.accept)
-            
-            hbox_botoes.addWidget(btn_sair)
-            hbox_botoes.addWidget(btn_ok)
-            layout.addLayout(hbox_botoes)
-            
-            dialog.adjustSize()
-            
-            # A Engenharia de Posicionamento Físico Blindada (Impede que a janela saia da tela)
-            if alvo:
-                pos_alvo = alvo.mapToGlobal(QPoint(0, 0))
-                novo_x, novo_y = pos_alvo.x(), pos_alvo.y()
-                
-                if direcao == "esquerda":
-                    novo_x = pos_alvo.x() + alvo.width() + 15
-                elif direcao == "cima":
-                    novo_y = pos_alvo.y() + alvo.height() + 15
-                elif direcao == "baixo":
-                    novo_y = pos_alvo.y() - dialog.height() - 15
-                    
-                # Trava a janela dentro dos limites reais do seu monitor
-                screen_geom = QApplication.primaryScreen().availableGeometry()
-                novo_x = max(screen_geom.left(), min(novo_x, screen_geom.right() - dialog.width()))
-                novo_y = max(screen_geom.top(), min(novo_y, screen_geom.bottom() - dialog.height()))
-                
-                dialog.move(novo_x, novo_y)
-            
-            # Se o usuário apertar a tecla ESC do teclado, aborta o tutorial
-            if dialog.exec() == QDialog.Rejected:
-                break
+        self.overlay_tutorial.iniciar(passos)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Garante que o recorte cubra a tela toda se o cara redimensionar a janela durante o tutorial
+        if hasattr(self, 'overlay_tutorial') and self.overlay_tutorial.isVisible():
+            self.overlay_tutorial.setGeometry(0, 0, self.width(), self.height())
+            self.overlay_tutorial.atualizar_passo()
             
     def checar_notas_atualizacao(self):
         # Olha no config.json se ele já viu as novidades
