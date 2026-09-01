@@ -1,62 +1,133 @@
 {
     "nome": "SmartSlides Pro",
-    "versao_atual": "v1.5.8",
+    "versao_atual": "v1.6.3",
     "repo": "https://github.com/VegaPunkSquer/App-Pai-PPTX",
     "builds": {
         "desktop": "exe.bat"
     },
     "produto_id_master": 1,
     "planos_precos": {
-        "SAAS_MENSAL": {
+        "SAAS_MENSAL_ASAAS_ASAAS": {
             "tipo": "assinatura",
             "valor": 49.9,
+            "gateway": "asaas",
             "trial_dias": 0,
             "ciclo": "mensal"
         },
-        "SAAS_TRIMESTRAL": {
+        "SAAS_TRIMESTRAL_ASAAS_ASAAS": {
             "tipo": "assinatura",
             "valor": 39.9,
+            "gateway": "asaas",
             "trial_dias": 0,
             "ciclo": "trimestral"
         },
-        "SAAS_SEMESTRAL": {
+        "SAAS_SEMESTRAL_ASAAS_ASAAS": {
             "tipo": "assinatura",
             "valor": 29.9,
+            "gateway": "asaas",
             "trial_dias": 0,
             "ciclo": "semestral"
         },
-        "SAAS_ANUAL": {
+        "SAAS_ANUAL_ASAAS_ASAAS": {
             "tipo": "assinatura",
             "valor": 19.9,
+            "gateway": "asaas",
             "trial_dias": 7,
             "ciclo": "anual"
         },
-        "BYOK": {
+        "BYOK_ASAAS_ASAAS": {
             "tipo": "unico",
             "valor": 59.9,
+            "gateway": "asaas",
             "trial_dias": 0
         },
-        "ELITE_MENSAL": {
+        "ELITE_MENSAL_ASAAS_ASAAS": {
             "tipo": "assinatura",
             "valor": 79.9,
+            "gateway": "asaas",
             "trial_dias": 0,
             "ciclo": "mensal"
         },
-        "ELITE_TRIMESTRAL": {
+        "ELITE_TRIMESTRAL_ASAAS_ASAAS": {
             "tipo": "assinatura",
             "valor": 69.9,
+            "gateway": "asaas",
             "trial_dias": 0,
             "ciclo": "trimestral"
         },
-        "ELITE_SEMESTRAL": {
+        "ELITE_SEMESTRAL_ASAAS_ASAAS": {
             "tipo": "assinatura",
             "valor": 59.9,
+            "gateway": "asaas",
             "trial_dias": 0,
             "ciclo": "semestral"
         },
-        "ELITE_ANUAL": {
+        "ELITE_ANUAL_ASAAS_ASAAS": {
             "tipo": "assinatura",
             "valor": 49.9,
+            "gateway": "asaas",
+            "trial_dias": 0,
+            "ciclo": "anual"
+        },
+        "MONTLHY_PRO_MENSAL_STRIPE": {
+            "tipo": "assinatura",
+            "valor": 9.9,
+            "gateway": "stripe",
+            "trial_dias": 0,
+            "ciclo": "mensal"
+        },
+        "QUARTERLY_PRO_TRIMESTRAL_STRIPE": {
+            "tipo": "assinatura",
+            "valor": 24.9,
+            "gateway": "stripe",
+            "trial_dias": 0,
+            "ciclo": "trimestral"
+        },
+        "SEMI-ANNUAL_PRO_ANUAL_STRIPE": {
+            "tipo": "assinatura",
+            "valor": 39.9,
+            "gateway": "stripe",
+            "trial_dias": 0,
+            "ciclo": "anual"
+        },
+        "ANNUAL_PRO_ANUAL_STRIPE": {
+            "tipo": "assinatura",
+            "valor": 59.9,
+            "gateway": "stripe",
+            "trial_dias": 0,
+            "ciclo": "anual"
+        },
+        "BYOK_PRO_STRIPE": {
+            "tipo": "unico",
+            "valor": 49.9,
+            "gateway": "stripe",
+            "trial_dias": 0
+        },
+        "MONTLHY_ELITE_MENSAL_STRIPE": {
+            "tipo": "assinatura",
+            "valor": 14.9,
+            "gateway": "stripe",
+            "trial_dias": 0,
+            "ciclo": "mensal"
+        },
+        "QUARTERLY_ELITE_TRIMESTRAL_STRIPE": {
+            "tipo": "assinatura",
+            "valor": 34.9,
+            "gateway": "stripe",
+            "trial_dias": 0,
+            "ciclo": "trimestral"
+        },
+        "SEMI-ANNUAL_ELITE_SEMESTRAL_STRIPE": {
+            "tipo": "assinatura",
+            "valor": 54.9,
+            "gateway": "stripe",
+            "trial_dias": 0,
+            "ciclo": "semestral"
+        },
+        "ANNUAL_ELITE_ANUAL_STRIPE": {
+            "tipo": "assinatura",
+            "valor": 89.9,
+            "gateway": "stripe",
             "trial_dias": 0,
             "ciclo": "anual"
         }

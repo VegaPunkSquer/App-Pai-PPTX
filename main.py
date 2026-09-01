@@ -329,12 +329,37 @@ class LoginCadastroDialog(QDialog):
         # ABA CADASTRO
         self.tab_cadastro = QWidget()
         layout_cad = QVBoxLayout(self.tab_cadastro)
+        
+        import idiomas
+        self.chk_gringo = QCheckBox(idiomas.tr("cad_chk_gringo") if hasattr(idiomas, 'tr') else "Sou de fora do Brasil / I'm an international user")
+        self.chk_gringo.setStyleSheet("color: #ffc107; font-weight: bold; margin-bottom: 5px;")
+        self.chk_gringo.toggled.connect(self.alternar_modo_gringo)
+
         self.inp_cad_nome = QLineEdit()
         self.inp_cad_nome.setPlaceholderText("Nome Completo")
         self.inp_cad_email = QLineEdit()
         self.inp_cad_email.setPlaceholderText("E-mail")
+        
+        # Container de Documento (Brasil) vs País (Gringo)
+        self.container_doc = QWidget()
+        lay_doc = QVBoxLayout(self.container_doc)
+        lay_doc.setContentsMargins(0, 0, 0, 0)
+        self.lbl_doc = QLabel("CPF/CNPJ:")
         self.inp_cad_doc = QLineEdit()
-        self.inp_cad_doc.setPlaceholderText("CPF ou CNPJ (Apenas números)")
+        self.inp_cad_doc.setPlaceholderText("Apenas números")
+        lay_doc.addWidget(self.lbl_doc)
+        lay_doc.addWidget(self.inp_cad_doc)
+
+        self.container_pais = QWidget()
+        lay_pais = QVBoxLayout(self.container_pais)
+        lay_pais.setContentsMargins(0, 0, 0, 0)
+        self.lbl_pais = QLabel("Country:")
+        self.combo_pais = QComboBox()
+        self.combo_pais.addItems(["United States", "Canada", "United Kingdom", "Portugal", "Australia", "Other"])
+        lay_pais.addWidget(self.lbl_pais)
+        lay_pais.addWidget(self.combo_pais)
+        self.container_pais.hide() # Escondido por padrão
+
         self.inp_cad_senha = QLineEdit()
         self.inp_cad_senha.setPlaceholderText("Crie uma Senha")
         self.inp_cad_senha.setEchoMode(QLineEdit.Password)
@@ -343,20 +368,29 @@ class LoginCadastroDialog(QDialog):
         self.btn_cadastrar.clicked.connect(self.fazer_cadastro)
         
         layout_cad.addWidget(QLabel("Novo por aqui? Cadastre-se:"))
+        layout_cad.addWidget(self.chk_gringo)
         layout_cad.addWidget(QLabel("Nome Completo:"))
         layout_cad.addWidget(self.inp_cad_nome)
         layout_cad.addWidget(QLabel("E-mail:"))
         layout_cad.addWidget(self.inp_cad_email)
-        layout_cad.addWidget(QLabel("CPF/CNPJ:"))
-        layout_cad.addWidget(self.inp_cad_doc)
+        layout_cad.addWidget(self.container_doc)
+        layout_cad.addWidget(self.container_pais)
         layout_cad.addWidget(QLabel("Senha:"))
         layout_cad.addWidget(self.inp_cad_senha)
         layout_cad.addWidget(self.btn_cadastrar)
         layout_cad.addStretch()
-        
+
         self.tabs.addTab(self.tab_login, "Login")
         self.tabs.addTab(self.tab_cadastro, "Criar Conta")
         layout.addWidget(self.tabs)
+
+    def alternar_modo_gringo(self, checked):
+        if checked:
+            self.container_doc.hide()
+            self.container_pais.show()
+        else:
+            self.container_pais.hide()
+            self.container_doc.show()
 
     def fazer_login(self):
         email = self.inp_login_email.text().strip()
@@ -376,17 +410,27 @@ class LoginCadastroDialog(QDialog):
     def fazer_cadastro(self):
         nome = self.inp_cad_nome.text().strip()
         email = self.inp_cad_email.text().strip()
-        doc = "".join(filter(str.isdigit, self.inp_cad_doc.text()))
         senha = self.inp_cad_senha.text()
         
-        if not nome or not email or not doc or not senha:
-            QMessageBox.warning(self, "Aviso", "Preencha todos os campos.")
+        is_gringo = self.chk_gringo.isChecked()
+        doc = "".join(filter(str.isdigit, self.inp_cad_doc.text())) if not is_gringo else "EXTRANGEIRO"
+        pais = self.combo_pais.currentText() if is_gringo else "BR"
+        
+        if not nome or not email or not senha or (not is_gringo and not doc):
+            QMessageBox.warning(self, "Aviso", "Preencha todos os campos obrigatórios.")
             return
             
         self.btn_cadastrar.setEnabled(False)
         self.btn_cadastrar.setText("Registrando...")
         
-        payload = {"nome": nome, "email": email, "documento": doc, "senha": senha, "produto": "SmartSlides Pro"}
+        payload = {
+            "nome": nome, 
+            "email": email, 
+            "documento": doc, 
+            "senha": senha, 
+            "produto": "SmartSlides Pro",
+            "pais": pais
+        }
         self.worker = WorkerAuthApp('registrar', payload)
         self.worker.sucesso.connect(self.auth_sucesso)
         self.worker.erro.connect(self.auth_erro)
@@ -410,11 +454,16 @@ class LoginCadastroDialog(QDialog):
 class WorkerVitrine(QThread):
     sucesso = Signal(dict)
     erro = Signal(str)
+    
+    def __init__(self, moeda="BRL"):
+        super().__init__()
+        self.moeda = moeda
 
     def run(self):
         try:
-            # Usamos %20 no lugar do espaço para a URL ficar perfeitamente legível pro Master
-            resp = requests.get("https://vegap-masterapp.hf.space/master/vitrine/SmartSlides%20Pro")
+            # Pede a vitrine já informando se quer os preços do Stripe ou do Asaas
+            url = f"https://vegap-masterapp.hf.space/master/vitrine/SmartSlides%20Pro?moeda={self.moeda}"
+            resp = requests.get(url)
             if resp.status_code == 200:
                 self.sucesso.emit(resp.json())
             else:
@@ -426,13 +475,14 @@ class WorkerCheckout(QThread):
     sucesso = Signal(dict)
     erro = Signal(str)
 
-    def __init__(self, token, produto_id, plano_nome, cupom):
+    def __init__(self, token, produto_id, plano_nome, cupom, gateway="asaas"):
         super().__init__()
         self.payload = {
             "token": token,
             "produto_id": produto_id,
             "plano_nome": plano_nome,
-            "cupom": cupom
+            "cupom": cupom,
+            "gateway": gateway # Diz pro backend se é pra gerar link do Asaas ou do Stripe
         }
 
     def run(self):
@@ -490,6 +540,18 @@ class LojaDialog(QDialog):
         self.lbl_titulo.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
         self.layout.addWidget(self.lbl_titulo)
         
+        # CHAVINHA DE MOEDA (BRL / USD)
+        hbox_moeda = QHBoxLayout()
+        self.lbl_moeda = QLabel("Moeda (Currency):")
+        self.combo_moeda = QComboBox()
+        self.combo_moeda.addItems(["BRL (R$) - Brasil", "USD ($) - International"])
+        self.combo_moeda.setStyleSheet("padding: 4px; font-weight: bold;")
+        self.combo_moeda.currentIndexChanged.connect(self.carregar_vitrine)
+        hbox_moeda.addWidget(self.lbl_moeda)
+        hbox_moeda.addWidget(self.combo_moeda)
+        hbox_moeda.addStretch()
+        self.layout.addLayout(hbox_moeda)
+        
         # --- NOVO: SCROLL AREA PARA OS PLANOS NÃO ESMAGAREM ---
         self.scroll_planos = QScrollArea()
         self.scroll_planos.setWidgetResizable(True)
@@ -516,7 +578,16 @@ class LojaDialog(QDialog):
         self.layout.addWidget(self.lbl_status)
 
     def carregar_vitrine(self):
-        self.worker_vitrine = WorkerVitrine()
+        import idiomas
+        self.lbl_titulo.setText(idiomas.tr("loja_loading"))
+        
+        while self.container_planos.count():
+            item = self.container_planos.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
+            
+        moeda_escolhida = "USD" if self.combo_moeda.currentIndex() == 1 else "BRL"
+        
+        self.worker_vitrine = WorkerVitrine(moeda=moeda_escolhida)
         self.worker_vitrine.sucesso.connect(self.montar_planos)
         self.worker_vitrine.erro.connect(lambda e: self.lbl_titulo.setText("Erro ao carregar a loja."))
         self.worker_vitrine.start()
@@ -574,7 +645,8 @@ class LojaDialog(QDialog):
             lbl_nome.setStyleSheet("font-size: 16px; font-weight: 900; color: white; border: none;")
             
             txt_ciclo = f" / {ciclo}" if ciclo != "Unico" else ""
-            lbl_preco = QLabel(f"R$ {valor:.2f}{txt_ciclo}")
+            simbolo_moeda = "$" if self.combo_moeda.currentIndex() == 1 else "R$"
+            lbl_preco = QLabel(f"{simbolo_moeda} {valor:.2f}{txt_ciclo}")
             lbl_preco.setStyleSheet("font-size: 24px; font-weight: 800; color: #28a745; border: none;")
             
             card_layout.addWidget(lbl_nome)
@@ -614,8 +686,10 @@ class LojaDialog(QDialog):
         self.lbl_status.setText(idiomas.tr("loja_gerando"))
         self.setEnabled(False)
         
+        gateway_escolhido = "stripe" if self.combo_moeda.currentIndex() == 1 else "asaas"
+        
         self.plano_em_andamento = plano_nome # Anota qual botão ele clicou
-        self.worker_checkout = WorkerCheckout(self.token_cliente, self.produto_id, plano_nome, cupom)
+        self.worker_checkout = WorkerCheckout(self.token_cliente, self.produto_id, plano_nome, cupom, gateway_escolhido)
         self.worker_checkout.sucesso.connect(self.processar_checkout)
         self.worker_checkout.erro.connect(self.erro_checkout)
         self.worker_checkout.start()
@@ -712,7 +786,8 @@ class ConfigDialog(QDialog):
         self.wrapper_keys_gemini = QWidget()
         lay_keys_gem = QVBoxLayout(self.wrapper_keys_gemini)
         lay_keys_gem.setContentsMargins(0, 0, 0, 0)
-        lay_keys_gem.addWidget(QLabel("Chave de API Gemini (BYOK):"))
+        self.lbl_key_gemini = QLabel("Chave de API Gemini (BYOK):")
+        lay_keys_gem.addWidget(self.lbl_key_gemini)
         self.txt_api_key = QLineEdit(self.config.get("api_key", ""))
         self.txt_api_key.setEchoMode(QLineEdit.Password)
         lay_keys_gem.addWidget(self.txt_api_key)
@@ -723,7 +798,8 @@ class ConfigDialog(QDialog):
         self.combo_model.addItem(self.config.get("model", "gemini-2.5-flash"))
         self.btn_load_models = QPushButton("🔄 Buscar Modelos")
         self.btn_load_models.clicked.connect(self.load_gemini_models_live)
-        hbox_mod_gem.addWidget(QLabel("Modelo:"))
+        self.lbl_mod_gem = QLabel("Modelo:")
+        hbox_mod_gem.addWidget(self.lbl_mod_gem)
         hbox_mod_gem.addWidget(self.combo_model, 1)
         hbox_mod_gem.addWidget(self.btn_load_models)
         vbox_gem.addLayout(hbox_mod_gem)
@@ -752,10 +828,12 @@ class ConfigDialog(QDialog):
         self.wrapper_keys_cf = QWidget()
         lay_keys_cf = QVBoxLayout(self.wrapper_keys_cf)
         lay_keys_cf.setContentsMargins(0, 0, 0, 0)
-        lay_keys_cf.addWidget(QLabel("Cloudflare Account ID (BYOK):"))
+        self.lbl_acc_cf = QLabel("Cloudflare Account ID (BYOK):")
+        lay_keys_cf.addWidget(self.lbl_acc_cf)
         self.txt_cf_account = QLineEdit(self.config.get("cf_account_id", ""))
         lay_keys_cf.addWidget(self.txt_cf_account)
-        lay_keys_cf.addWidget(QLabel("Cloudflare API Token (BYOK):"))
+        self.lbl_tok_cf = QLabel("Cloudflare API Token (BYOK):")
+        lay_keys_cf.addWidget(self.lbl_tok_cf)
         self.txt_cf_token = QLineEdit(self.config.get("cf_api_token", ""))
         self.txt_cf_token.setEchoMode(QLineEdit.Password)
         lay_keys_cf.addWidget(self.txt_cf_token)
@@ -766,7 +844,8 @@ class ConfigDialog(QDialog):
         self.combo_cf_model.addItem(self.config.get("cf_model", "@cf/meta/llama-3-8b-instruct"))
         self.btn_load_cf = QPushButton("🔄 Carregar CF")
         self.btn_load_cf.clicked.connect(self.load_cf_models_live)
-        hbox_mod_cf.addWidget(QLabel("Modelo:"))
+        self.lbl_mod_cf = QLabel("Modelo:")
+        hbox_mod_cf.addWidget(self.lbl_mod_cf)
         hbox_mod_cf.addWidget(self.combo_cf_model, 1)
         hbox_mod_cf.addWidget(self.btn_load_cf)
         vbox_cf.addLayout(hbox_mod_cf)
@@ -862,6 +941,16 @@ class ConfigDialog(QDialog):
         self.combo_theme.setItemText(0, idiomas.tr("tema_escuro"))
         self.combo_theme.setItemText(1, idiomas.tr("tema_claro"))
 
+        self.lbl_aviso_saas.setText(idiomas.tr("cfg_aviso_saas"))
+        self.chk_gemini.setText(idiomas.tr("cfg_chk_gemini"))
+        self.chk_cloudflare.setText(idiomas.tr("cfg_chk_cf"))
+        self.btn_upgrade_elite.setText(idiomas.tr("cfg_btn_upgrade"))
+        self.lbl_key_gemini.setText(idiomas.tr("cfg_lbl_key_gemini"))
+        self.lbl_mod_gem.setText(idiomas.tr("cfg_lbl_modelo"))
+        self.lbl_acc_cf.setText(idiomas.tr("cfg_lbl_acc_cf"))
+        self.lbl_tok_cf.setText(idiomas.tr("cfg_lbl_tok_cf"))
+        self.lbl_mod_cf.setText(idiomas.tr("cfg_lbl_modelo"))
+
     def aplicar_zoom_ao_vivo(self, v):
         self.lbl_zoom_val.setText(f"{v}%")
         # Puxa o cordão da janela Pai e aplica o zoom na hora que deslizar!
@@ -869,7 +958,7 @@ class ConfigDialog(QDialog):
             self.parent().apply_zoom(v)
 
     def update_ia_tab_visibility(self, licensa):
-        if licensa == "SAAS (Chave Embutida)":
+        if "SAAS" in licensa:
             self.lbl_aviso_saas.show()
             self.wrapper_keys_gemini.hide()
             self.wrapper_keys_cf.hide()
@@ -884,7 +973,7 @@ class ConfigDialog(QDialog):
                 self.chk_cloudflare.setEnabled(True)
                 self.btn_upgrade_elite.hide()
                 
-        elif licensa == "BYOK (Sua Chave)":
+        elif "BYOK" in licensa:
             self.lbl_aviso_saas.hide()
             self.wrapper_keys_gemini.show()
             self.wrapper_keys_cf.show()
