@@ -253,9 +253,12 @@ def listar_modelos_gemini(api_key_usuario=None):
         
         for m in client.models.list():
             nome = m.name.replace('models/', '')
-            # Filtro direto e limpo: pega os "gemini" e descarta os geradores de vetores
-            if 'gemini' in nome.lower() and 'embed' not in nome.lower():
-                modelos.append(nome)
+            
+            # O FILTRO IMPLACÁVEL: Extermina tudo que não for modelo puro de texto
+            if 'gemini' in nome.lower() and re.search(r'\d+\.\d+', nome):
+                lixos = ['embed', 'vision', 'exp', 'aqa', 'learn', 'preview', 'live', 'tts', 'audio', 'image', 'omni', 'transcribe', 'computer']
+                if not any(lixo in nome.lower() for lixo in lixos):
+                    modelos.append(nome)
                 
         # Ordena alfabeticamente e inverte (pra jogar as versões mais novas pro topo)
         modelos.sort(reverse=True)
@@ -313,8 +316,17 @@ def testar_conectividade(api_key_usuario=None):
         return False, "Chave da API Gemini não configurada!"
     try:
         client = genai.Client(api_key=chave_final)
-        client.models.get(model='gemini-2.5-flash')
-        registrar_log_supremo("Teste de conectividade: SUCESSO. A chave está ativa.")
+        
+        # O teste também é cego! Ele pega o primeiro da lista que seja de texto.
+        modelo_teste = "gemini-1.5-flash" # Fallback temporário
+        for m in client.models.list():
+            nome = m.name.replace('models/', '')
+            if 'gemini' in nome.lower() and re.search(r'\d+\.\d+', nome) and 'embed' not in nome.lower():
+                modelo_teste = nome
+                break
+                
+        client.models.get(model=modelo_teste)
+        registrar_log_supremo(f"Teste de conectividade: SUCESSO. Testado com: {modelo_teste}")
         return True, "OK"
     except Exception as e:
         erro_str = str(e)

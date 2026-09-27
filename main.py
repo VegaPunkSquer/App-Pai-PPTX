@@ -12,9 +12,9 @@ else:
 # O GOLPE DO APPDATA: Cria uma pasta invisível no sistema para configs e históricos.
 # Assim o .exe pode ficar em qualquer lugar sem dar erro de permissão no Windows.
 if os.name == 'nt':
-    user_data_dir = os.path.join(os.getenv('APPDATA'), "VegaTech", "SmartSlidesPro")
+    user_data_dir = os.path.join(os.getenv('APPDATA'), "VegaTech", "VegaSlides")
 else:
-    user_data_dir = os.path.join(os.path.expanduser("~"), ".vegatech", "smartslidespro")
+    user_data_dir = os.path.join(os.path.expanduser("~"), ".vegatech", "VegaSlides")
 
 os.makedirs(user_data_dir, exist_ok=True) # Cria a pasta automaticamente e silenciosamente
 
@@ -54,6 +54,8 @@ if os.path.exists(old_hist_folder) and not os.path.exists(PASTA_HISTORICO_PPTX):
 MANIFESTO_FILE = os.path.join(base_dir, "vega_manifesto.json")
 VERSAO_ATUAL = "v1.0.0"
 PRODUTO_ID_MASTER = 1 # Usado para bater na sua API
+PLANOS_MANIFESTO = {} # <-- O CÉREBRO DAS PULSEIRAS
+NOME_APP_MASTER = "VegaSlides" # <-- VARIÁVEL MODULAR DO NOME
 
 if os.path.exists(MANIFESTO_FILE):
     try:
@@ -61,8 +63,11 @@ if os.path.exists(MANIFESTO_FILE):
         with open(MANIFESTO_FILE, "r", encoding="utf-8") as _f:
             _dados_manifesto = _json_temp.load(_f)
             VERSAO_ATUAL = _dados_manifesto.get("versao_atual", "v1.0.0")
+            NOME_APP_MASTER = _dados_manifesto.get("nome", "VegaSlides")
             if "produto_id_master" in _dados_manifesto:
                 PRODUTO_ID_MASTER = _dados_manifesto["produto_id_master"]
+            if "planos_precos" in _dados_manifesto:
+                PLANOS_MANIFESTO = _dados_manifesto["planos_precos"]
     except Exception:
         pass
 
@@ -79,7 +84,7 @@ class SplashScreenVega(QSplashScreen):
         pixmap = QPixmap(caminho_img).scaled(650, 400, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         super().__init__(pixmap, Qt.FramelessWindowHint) # Removido o WindowStaysOnTopHint que travava a tela
         
-        self.lbl_status = QLabel("Iniciando SmartSlides Pro...", self)
+        self.lbl_status = QLabel("Iniciando VegaSlides...", self)
         self.lbl_status.setStyleSheet("color: white; font-weight: bold; font-size: 13px; background-color: rgba(0,0,0,150); padding: 2px; border-radius: 4px;")
         self.lbl_status.setAlignment(Qt.AlignCenter)
         self.lbl_status.setGeometry(20, pixmap.height() - 70, pixmap.width() - 40, 25)
@@ -115,7 +120,7 @@ from PySide6.QtWidgets import (
     QDialog, QFrame, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
     QPushButton, QFileDialog, QColorDialog, QFontDialog, QMessageBox,
     QCheckBox, QSpinBox, QTextEdit, QScrollArea, QListWidget, QSlider, QProgressDialog,
-    QTabWidget, QComboBox, QLineEdit, QInputDialog
+    QTabWidget, QComboBox, QLineEdit, QInputDialog, QStackedWidget
 )
 from PySide6.QtGui import QColor, QFont, QPalette, QIcon, QPainter, QPen
 from PySide6.QtCore import QThread, QSize, Signal, QPoint, QRect
@@ -271,7 +276,7 @@ class ImageSelectionDialog(QDialog):
         self.show_options_for_slide(row_idx)
         
 class WorkerAuthApp(QThread):
-    sucesso = Signal(str)
+    sucesso = Signal(dict)
     erro = Signal(str)
 
     def __init__(self, modo, payload):
@@ -286,7 +291,7 @@ class WorkerAuthApp(QThread):
             resp = requests.post(endpoint, json=self.payload, timeout=10)
             if resp.status_code in [200, 201]:
                 dados = resp.json()
-                self.sucesso.emit(dados.get("access_token", ""))
+                self.sucesso.emit(dados) # <-- Manda TUDO que a API cuspir de volta
             else:
                 self.erro.emit(f"Erro: {resp.json().get('detail', resp.text)}")
         except Exception as e:
@@ -303,25 +308,35 @@ class LoginCadastroDialog(QDialog):
         self.init_ui()
 
     def init_ui(self):
+        import idiomas
+        
+        # MÁGICA: Se o idioma.py não achar a chave, ele devolve o texto padrão em vez da variável feia
+        def tr_safe(chave, padrao):
+            res = idiomas.tr(chave) if hasattr(idiomas, 'tr') else chave
+            return padrao if res == chave else res
+
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
+        
+        self.setWindowTitle(tr_safe("auth_title", "Conta VegaTech"))
         
         # ABA LOGIN
         self.tab_login = QWidget()
         layout_login = QVBoxLayout(self.tab_login)
         self.inp_login_email = QLineEdit()
-        self.inp_login_email.setPlaceholderText("E-mail")
+        self.inp_login_email.setPlaceholderText(tr_safe("auth_email", "E-mail"))
         self.inp_login_senha = QLineEdit()
-        self.inp_login_senha.setPlaceholderText("Senha")
+        self.inp_login_senha.setPlaceholderText(tr_safe("auth_senha", "Senha"))
         self.inp_login_senha.setEchoMode(QLineEdit.Password)
-        self.btn_logar = QPushButton("Entrar")
+        
+        self.btn_logar = QPushButton(tr_safe("auth_btn_entrar", "Entrar"))
         self.btn_logar.setStyleSheet("background-color: #0078d7; color: white; padding: 10px; font-weight: bold;")
         self.btn_logar.clicked.connect(self.fazer_login)
         
-        layout_login.addWidget(QLabel("Já tem uma conta? Acesse:"))
-        layout_login.addWidget(QLabel("E-mail:"))
+        layout_login.addWidget(QLabel(tr_safe("auth_log_title", "Já tem uma conta? Acesse:")))
+        layout_login.addWidget(QLabel(tr_safe("auth_email", "E-mail:")))
         layout_login.addWidget(self.inp_login_email)
-        layout_login.addWidget(QLabel("Senha:"))
+        layout_login.addWidget(QLabel(tr_safe("auth_senha", "Senha:")))
         layout_login.addWidget(self.inp_login_senha)
         layout_login.addWidget(self.btn_logar)
         layout_login.addStretch()
@@ -330,15 +345,14 @@ class LoginCadastroDialog(QDialog):
         self.tab_cadastro = QWidget()
         layout_cad = QVBoxLayout(self.tab_cadastro)
         
-        import idiomas
-        self.chk_gringo = QCheckBox(idiomas.tr("cad_chk_gringo") if hasattr(idiomas, 'tr') else "Sou de fora do Brasil / I'm an international user")
+        self.chk_gringo = QCheckBox(tr_safe("cad_chk_gringo", "Sou de fora do Brasil (International User)"))
         self.chk_gringo.setStyleSheet("color: #ffc107; font-weight: bold; margin-bottom: 5px;")
         self.chk_gringo.toggled.connect(self.alternar_modo_gringo)
 
         self.inp_cad_nome = QLineEdit()
-        self.inp_cad_nome.setPlaceholderText("Nome Completo")
+        self.inp_cad_nome.setPlaceholderText(tr_safe("auth_nome", "Nome Completo"))
         self.inp_cad_email = QLineEdit()
-        self.inp_cad_email.setPlaceholderText("E-mail")
+        self.inp_cad_email.setPlaceholderText(tr_safe("auth_email", "E-mail"))
         
         # Container de Documento (Brasil) vs País (Gringo)
         self.container_doc = QWidget()
@@ -346,42 +360,43 @@ class LoginCadastroDialog(QDialog):
         lay_doc.setContentsMargins(0, 0, 0, 0)
         self.lbl_doc = QLabel("CPF/CNPJ:")
         self.inp_cad_doc = QLineEdit()
-        self.inp_cad_doc.setPlaceholderText("Apenas números")
+        self.inp_cad_doc.setPlaceholderText(tr_safe("auth_doc_ph", "Apenas números"))
         lay_doc.addWidget(self.lbl_doc)
         lay_doc.addWidget(self.inp_cad_doc)
 
         self.container_pais = QWidget()
         lay_pais = QVBoxLayout(self.container_pais)
         lay_pais.setContentsMargins(0, 0, 0, 0)
-        self.lbl_pais = QLabel("Country:")
+        self.lbl_pais = QLabel(tr_safe("auth_lbl_pais", "País (Country):"))
         self.combo_pais = QComboBox()
         self.combo_pais.addItems(["United States", "Canada", "United Kingdom", "Portugal", "Australia", "Other"])
         lay_pais.addWidget(self.lbl_pais)
         lay_pais.addWidget(self.combo_pais)
-        self.container_pais.hide() # Escondido por padrão
+        self.container_pais.hide()
 
         self.inp_cad_senha = QLineEdit()
-        self.inp_cad_senha.setPlaceholderText("Crie uma Senha")
+        self.inp_cad_senha.setPlaceholderText(tr_safe("auth_senha_nova", "Crie uma Senha"))
         self.inp_cad_senha.setEchoMode(QLineEdit.Password)
-        self.btn_cadastrar = QPushButton("Criar Conta")
+        
+        self.btn_cadastrar = QPushButton(tr_safe("auth_btn_criar", "Criar Conta"))
         self.btn_cadastrar.setStyleSheet("background-color: #28a745; color: white; padding: 10px; font-weight: bold;")
         self.btn_cadastrar.clicked.connect(self.fazer_cadastro)
         
-        layout_cad.addWidget(QLabel("Novo por aqui? Cadastre-se:"))
+        layout_cad.addWidget(QLabel(tr_safe("auth_cad_title", "Novo por aqui? Cadastre-se:")))
         layout_cad.addWidget(self.chk_gringo)
-        layout_cad.addWidget(QLabel("Nome Completo:"))
+        layout_cad.addWidget(QLabel(tr_safe("auth_nome", "Nome Completo:")))
         layout_cad.addWidget(self.inp_cad_nome)
-        layout_cad.addWidget(QLabel("E-mail:"))
+        layout_cad.addWidget(QLabel(tr_safe("auth_email", "E-mail:")))
         layout_cad.addWidget(self.inp_cad_email)
         layout_cad.addWidget(self.container_doc)
         layout_cad.addWidget(self.container_pais)
-        layout_cad.addWidget(QLabel("Senha:"))
+        layout_cad.addWidget(QLabel(tr_safe("auth_senha", "Senha:")))
         layout_cad.addWidget(self.inp_cad_senha)
         layout_cad.addWidget(self.btn_cadastrar)
         layout_cad.addStretch()
 
-        self.tabs.addTab(self.tab_login, "Login")
-        self.tabs.addTab(self.tab_cadastro, "Criar Conta")
+        self.tabs.addTab(self.tab_login, tr_safe("auth_tab_login", "Login"))
+        self.tabs.addTab(self.tab_cadastro, tr_safe("auth_tab_cad", "Criar Conta"))
         layout.addWidget(self.tabs)
 
     def alternar_modo_gringo(self, checked):
@@ -428,7 +443,7 @@ class LoginCadastroDialog(QDialog):
             "email": email, 
             "documento": doc, 
             "senha": senha, 
-            "produto": "SmartSlides Pro",
+            "produto": NOME_APP_MASTER,
             "pais": pais
         }
         self.worker = WorkerAuthApp('registrar', payload)
@@ -436,8 +451,21 @@ class LoginCadastroDialog(QDialog):
         self.worker.erro.connect(self.auth_erro)
         self.worker.start()
 
-    def auth_sucesso(self, token):
-        self.token_recebido = token
+    def auth_sucesso(self, dados):
+        self.token_recebido = dados.get("access_token", "")
+        
+        # A MÁGICA: Se a API mandar as flags de VIP, já destranca o app na hora!
+        if self.parent() and hasattr(self.parent(), 'config'):
+            self.parent().config["saas_padrao_ativo"] = dados.get("saas_padrao_ativo", False)
+            self.parent().config["saas_elite_ativo"] = dados.get("saas_elite_ativo", False)
+            self.parent().config["byok_ativo"] = dados.get("byok_ativo", False)
+            
+            # Se for VIP, já muda o Dropdown e a memória pro plano certo automaticamente
+            if self.parent().config["saas_padrao_ativo"] or self.parent().config["saas_elite_ativo"]:
+                self.parent().config["license"] = "SAAS (Chave Embutida)"
+            elif self.parent().config["byok_ativo"]:
+                self.parent().config["license"] = "BYOK (Sua Chave)"
+                
         QMessageBox.information(self, "Sucesso", "Conta conectada com sucesso!")
         self.accept()
 
@@ -461,9 +489,35 @@ class WorkerVitrine(QThread):
 
     def run(self):
         try:
-            # Pede a vitrine já informando se quer os preços do Stripe ou do Asaas
-            url = f"https://vegap-masterapp.hf.space/master/vitrine/SmartSlides%20Pro?moeda={self.moeda}"
-            resp = requests.get(url)
+            # 1. Puxa a lista global da Nave-Mãe e descobre o nome VERDADEIRO pelo ID!
+            resp_global = requests.get("https://vegap-masterapp.hf.space/master/vitrine-global", timeout=10)
+            if resp_global.status_code != 200:
+                self.erro.emit("Erro ao conectar com a Nave-Mãe.")
+                return
+                
+            nome_real = None
+            global PRODUTO_ID_MASTER
+            for app in resp_global.json():
+                if app.get("id") == PRODUTO_ID_MASTER:
+                    nome_real = app.get("nome")
+                    break
+                    
+            if not nome_real:
+                self.erro.emit("Aplicativo não encontrado pelo ID no servidor.")
+                return
+
+            # 2. Usa o nome blindado e atualizado para pedir a vitrine
+            import urllib.parse
+            nome_url = urllib.parse.quote(nome_real)
+            url = f"https://vegap-masterapp.hf.space/master/vitrine/{nome_url}?moeda={self.moeda}"
+            resp = requests.get(url, timeout=10)
+            
+            if resp.status_code == 200:
+                self.sucesso.emit(resp.json())
+            else:
+                self.erro.emit("Erro ao carregar a vitrine.")
+        except Exception as e:
+            self.erro.emit(str(e))
             if resp.status_code == 200:
                 self.sucesso.emit(resp.json())
             else:
@@ -520,7 +574,7 @@ class WorkerStatusPagamento(QThread):
 class LojaDialog(QDialog):
     def __init__(self, token_cliente, filtro_loja="SAAS", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("🛒 Loja VegaTech - SmartSlides Pro")
+        self.setWindowTitle("🛒 Loja VegaTech - VegaSlides")
         self.setFixedSize(450, 500)
         self.token_cliente = token_cliente
         self.filtro_loja = filtro_loja # "SAAS" ou "BYOK"
@@ -618,14 +672,16 @@ class LojaDialog(QDialog):
         )
         
         for nome_plano, detalhes in planos_ordenados:
-            # GOLPE VEGATECH: Filtro Absoluto! 
-            if self.filtro_loja == "BYOK" and "BYOK" not in nome_plano.upper():
+            # Cruza o plano do DB com o manifesto local para achar a pulseira (1, 2 ou 3)
+            config_plano = PLANOS_MANIFESTO.get(nome_plano.upper(), {})
+            pulseira = str(config_plano.get("nivel", "1")).upper()
+            
+            # GOLPE VEGATECH: Filtro Absoluto por Pulseira!
+            if self.filtro_loja == "BYOK" and pulseira != "2":
                 continue
-            # Se pediu SAAS genérico, não mostra o BYOK
-            if self.filtro_loja == "SAAS" and "BYOK" in nome_plano.upper():
+            if self.filtro_loja == "SAAS" and pulseira == "2":
                 continue
-            # A VITRINE VIP: Se pediu ELITE, esconde tudo que não tiver ELITE no nome
-            if self.filtro_loja == "ELITE" and "ELITE" not in nome_plano.upper():
+            if self.filtro_loja == "ELITE" and pulseira != "3":
                 continue
                 
             valor = float(detalhes.get("valor", 0.0))
@@ -716,7 +772,31 @@ class LojaDialog(QDialog):
     def erro_checkout(self, erro):
         self.setEnabled(True)
         self.lbl_status.setText("")
-        QMessageBox.critical(self, "Erro", erro)
+        
+        # Intercepta token velho ou expirado e força o login na marra
+        if "expirada" in erro.lower() or "login" in erro.lower() or "autenticado" in erro.lower():
+            QMessageBox.warning(self, "Sessão Expirada", "Sua sessão expirou. Por favor, faça login novamente para continuar.")
+            self.token_cliente = None
+            
+            # Limpa o token estragado lá na configuração do app pai
+            if self.parent() and hasattr(self.parent(), 'config'):
+                self.parent().config["token_master"] = ""
+                if hasattr(self.parent(), 'save_config'):
+                    self.parent().save_config()
+            
+            # Abre a tela de login automaticamente
+            dialog_auth = LoginCadastroDialog(self)
+            if dialog_auth.exec() == QDialog.Accepted:
+                self.token_cliente = dialog_auth.token_recebido
+                if self.parent() and hasattr(self.parent(), 'config'):
+                    self.parent().config["token_master"] = self.token_cliente
+                    if hasattr(self.parent(), 'save_config'):
+                        self.parent().save_config()
+                # Opcional: Tenta comprar de novo sem o usuário clicar
+                if self.plano_em_andamento:
+                    self.comprar_plano(self.plano_em_andamento)
+        else:
+            QMessageBox.critical(self, "Erro", erro)
 
     def pagamento_confirmado(self):
         self.plano_comprado = self.plano_em_andamento # Grava o recibo!
@@ -795,7 +875,13 @@ class ConfigDialog(QDialog):
         
         hbox_mod_gem = QHBoxLayout()
         self.combo_model = QComboBox()
-        self.combo_model.addItem(self.config.get("model", "gemini-2.5-flash"))
+        
+        modelo_salvo = self.config.get("model", "")
+        if modelo_salvo:
+            self.combo_model.addItem(modelo_salvo)
+        else:
+            self.combo_model.addItem("Busque um modelo...")
+            
         self.btn_load_models = QPushButton("🔄 Buscar Modelos")
         self.btn_load_models.clicked.connect(self.load_gemini_models_live)
         self.lbl_mod_gem = QLabel("Modelo:")
@@ -891,9 +977,59 @@ class ConfigDialog(QDialog):
         vbox_vis.addLayout(hbox_zoom)
         vbox_vis.addStretch()
 
-        self.tabs.addTab(self.tab_licenca, "Licença")
-        self.tabs.addTab(self.tab_ia, "Inteligência Artificial")
-        self.tabs.addTab(self.tab_visual, "Aparência")
+        # --- Aba 4: Editor Padrão ---
+        self.tab_editor = QWidget()
+        vbox_editor = QVBoxLayout(self.tab_editor)
+        
+        import idiomas
+        self.lbl_editor = QLabel(idiomas.tr("lbl_editor"))
+        vbox_editor.addWidget(self.lbl_editor)
+        
+        self.combo_editor = QComboBox()
+        
+        # O Detetive: vasculha o PC atrás de editores usando caminhos absolutos
+        editores_encontrados = []
+        if os.name == 'nt':
+            import winreg
+            try:
+                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\powerpnt.exe")
+                path, _ = winreg.QueryValueEx(key, "")
+                if os.path.exists(path): editores_encontrados.append("Microsoft PowerPoint")
+            except: pass
+            
+            for path in [r"C:\Program Files\LibreOffice\program\simpress.exe", r"C:\Program Files (x86)\LibreOffice\program\simpress.exe"]:
+                if os.path.exists(path):
+                    editores_encontrados.append("LibreOffice Impress")
+                    break
+                    
+        if not editores_encontrados:
+            self.lbl_editor.setText(idiomas.tr("editor_detect_none"))
+            self.combo_editor.addItem(idiomas.tr("editor_opt_none"))
+        else:
+            self.lbl_editor.setText(idiomas.tr("editor_detect_found"))
+            self.combo_editor.addItem(idiomas.tr("editor_opt_system"))
+            self.combo_editor.addItems(editores_encontrados)
+            self.combo_editor.addItem(idiomas.tr("editor_opt_none"))
+
+        editor_salvo = self.config.get("app_editor", "")
+        idx = self.combo_editor.findText(editor_salvo)
+        
+        # Se achou o texto exato, maravilha. Se não, tenta deduzir caso o usuário tenha trocado o idioma
+        if idx >= 0:
+            self.combo_editor.setCurrentIndex(idx)
+        else:
+            if "Nenhum" in editor_salvo or "None" in editor_salvo:
+                self.combo_editor.setCurrentIndex(self.combo_editor.count() - 1)
+            elif "Sistema" in editor_salvo or "System" in editor_salvo:
+                self.combo_editor.setCurrentIndex(0)
+            
+        vbox_editor.addWidget(self.combo_editor)
+        vbox_editor.addStretch()
+
+        self.tabs.addTab(self.tab_licenca, idiomas.tr("cfg_tab_lic"))
+        self.tabs.addTab(self.tab_ia, idiomas.tr("cfg_tab_ia"))
+        self.tabs.addTab(self.tab_visual, idiomas.tr("cfg_tab_vis"))
+        self.tabs.addTab(self.tab_editor, idiomas.tr("cfg_tab_editor"))
         layout.addWidget(self.tabs)
 
         self.btn_salvar = QPushButton()
@@ -932,6 +1068,7 @@ class ConfigDialog(QDialog):
         self.tabs.setTabText(0, idiomas.tr("cfg_tab_lic"))
         self.tabs.setTabText(1, idiomas.tr("cfg_tab_ia"))
         self.tabs.setTabText(2, idiomas.tr("cfg_tab_vis"))
+        self.tabs.setTabText(3, idiomas.tr("cfg_tab_editor"))
         self.btn_load_models.setText(idiomas.tr("cfg_btn_buscar"))
         self.btn_load_cf.setText(idiomas.tr("cfg_btn_load_cf"))
         self.combo_licenca.setItemText(0, idiomas.tr("lic_free"))
@@ -950,6 +1087,17 @@ class ConfigDialog(QDialog):
         self.lbl_acc_cf.setText(idiomas.tr("cfg_lbl_acc_cf"))
         self.lbl_tok_cf.setText(idiomas.tr("cfg_lbl_tok_cf"))
         self.lbl_mod_cf.setText(idiomas.tr("cfg_lbl_modelo"))
+        
+        # --- TRADUÇÃO AO VIVO DA ABA EDITOR ---
+        if hasattr(self, 'lbl_editor'):
+            # Se tem só 1 item, é porque não achou nenhum programa
+            if self.combo_editor.count() == 1:
+                self.lbl_editor.setText(idiomas.tr("editor_detect_none"))
+                self.combo_editor.setItemText(0, idiomas.tr("editor_opt_none"))
+            else:
+                self.lbl_editor.setText(idiomas.tr("editor_detect_found"))
+                self.combo_editor.setItemText(0, idiomas.tr("editor_opt_system"))
+                self.combo_editor.setItemText(self.combo_editor.count() - 1, idiomas.tr("editor_opt_none"))
 
     def aplicar_zoom_ao_vivo(self, v):
         self.lbl_zoom_val.setText(f"{v}%")
@@ -993,11 +1141,13 @@ class ConfigDialog(QDialog):
         loja = LojaDialog(self.config.get("token_master"), "ELITE", self)
         if loja.exec() == QDialog.Accepted:
             self.config["token_master"] = loja.token_cliente
-            if loja.plano_comprado and "ELITE" in loja.plano_comprado.upper():
-                self.config["saas_elite_ativo"] = True
-                self.config["saas_padrao_ativo"] = False
-                QMessageBox.information(self, "Bem-vindo ao Elite!", "Poder Multi-IA liberado com sucesso!")
-                self.update_ia_tab_visibility("SAAS (Chave Embutida)")
+            if loja.plano_comprado:
+                pulseira = str(PLANOS_MANIFESTO.get(loja.plano_comprado.upper(), {}).get("nivel", "1")).upper()
+                if pulseira == "3":
+                    self.config["saas_elite_ativo"] = True
+                    self.config["saas_padrao_ativo"] = False
+                    QMessageBox.information(self, "Bem-vindo ao Elite!", "Poder Multi-IA liberado com sucesso!")
+                    self.update_ia_tab_visibility("SAAS (Chave Embutida)")
 
     def alternar_provedor(self, origem, checked):
         if not checked:
@@ -1038,7 +1188,9 @@ class ConfigDialog(QDialog):
         modelos, erro = motor_ia.listar_modelos_gemini(chave)
         self.combo_model.clear()
         if modelos: 
+            self.combo_model.addItem("--- Escolha um Modelo ---") # Força a pessoa a decidir
             self.combo_model.addItems(modelos)
+            self.combo_model.setCurrentIndex(0) # Trava o botão no texto de aviso
         else: 
             QMessageBox.critical(self, "Erro na API Gemini", f"A API do Google recusou a conexão.\n\nDetalhe do erro:\n{erro}")
         self.btn_load_models.setText("🔄 Buscar Modelos")
@@ -1096,12 +1248,14 @@ class ConfigDialog(QDialog):
                 loja = LojaDialog(self.config.get("token_master"), "SAAS", self)
                 if loja.exec() == QDialog.Accepted:
                     self.config["token_master"] = loja.token_cliente
-                    if loja.plano_comprado and "ELITE" in loja.plano_comprado.upper():
-                        self.config["saas_elite_ativo"] = True
-                        self.config["saas_padrao_ativo"] = False
-                    else:
-                        self.config["saas_padrao_ativo"] = True
-                        self.config["saas_elite_ativo"] = False
+                    if loja.plano_comprado:
+                        pulseira = str(PLANOS_MANIFESTO.get(loja.plano_comprado.upper(), {}).get("nivel", "1")).upper()
+                        if pulseira == "3":
+                            self.config["saas_elite_ativo"] = True
+                            self.config["saas_padrao_ativo"] = False
+                        else:
+                            self.config["saas_padrao_ativo"] = True
+                            self.config["saas_elite_ativo"] = False
                 else: 
                     self.combo_licenca.setCurrentText(licenca_salva)
                     return
@@ -1119,6 +1273,8 @@ class ConfigDialog(QDialog):
         self.config["cf_account_id"] = self.txt_cf_account.text().strip()
         self.config["cf_api_token"] = self.txt_cf_token.text().strip()
         self.config["cf_model"] = self.combo_cf_model.currentText()
+        
+        self.config["app_editor"] = self.combo_editor.currentText()
         
         # Garante a gravação permanente das chaves de ativação na memória
         self.config["saas_elite_ativo"] = self.config.get("saas_elite_ativo", False)
@@ -1182,10 +1338,16 @@ class NovidadesDialog(QDialog):
         import idiomas
         self.setWindowTitle(idiomas.tr("nov_janela").format(versao))
         
-        # MÁGICA: A largura se adapta ao zoom para não esmagar o texto gigante!
-        nova_largura = int(650 * (zoom_atual / 100.0))
-        self.setFixedSize(nova_largura, 650) # Altura cravada em 650, largura dinâmica
+        # MÁGICA: Tela de Desktop de verdade (Paisagem) e expansível
+        nova_largura = int(850 * (zoom_atual / 100.0))
+        nova_altura = int(550 * (zoom_atual / 100.0))
+        self.resize(nova_largura, nova_altura)
+        self.setMinimumSize(600, 400) # Impede o usuário de esmagar demais
         
+        # ACESSIBILIDADE: Herda a fonte com zoom do app pai e aplica em tudo dentro da janela
+        if parent:
+            self.setFont(parent.font())
+            
         layout = QVBoxLayout(self)
         
         lbl_titulo = QLabel(idiomas.tr("nov_header").format(versao))
@@ -1213,6 +1375,75 @@ class NovidadesDialog(QDialog):
         
         btn_ok = QPushButton(idiomas.tr("nov_btn_ok"))
         btn_ok.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 10px;")
+        btn_ok.setCursor(Qt.PointingHandCursor)
+        btn_ok.clicked.connect(self.accept)
+        layout.addWidget(btn_ok)
+
+# --- JANELA DO QUADRO DE AVISOS (MEGAFONE) ---
+class AvisosDialog(QDialog):
+    def __init__(self, avisos, zoom_atual=100, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("📢 Quadro de Avisos")
+        
+        # Formato widescreen elegante de Launcher de PC
+        nova_largura = int(850 * (zoom_atual / 100.0))
+        nova_altura = int(550 * (zoom_atual / 100.0))
+        self.resize(nova_largura, nova_altura)
+        self.setMinimumSize(600, 400)
+        
+        # ACESSIBILIDADE: Herda a fonte com zoom do app pai e aplica em tudo dentro da janela
+        if parent:
+            self.setFont(parent.font())
+            
+        layout = QVBoxLayout(self)
+        
+        lbl_titulo = QLabel("<b>Avisos Importantes do Sistema:</b>")
+        lbl_titulo.setStyleSheet("font-size: 16px;")
+        layout.addWidget(lbl_titulo)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("QScrollArea { border: 1px solid gray; border-radius: 5px; }")
+        
+        conteudo = QWidget()
+        lay_conteudo = QVBoxLayout(conteudo)
+        
+        if not avisos:
+            lbl_vazio = QLabel("Nenhum aviso no momento.")
+            lbl_vazio.setAlignment(Qt.AlignCenter)
+            lbl_vazio.setStyleSheet("color: gray; font-style: italic;")
+            lay_conteudo.addWidget(lbl_vazio)
+        else:
+            # Exibe apenas os últimos 10 para não lotar a memória
+            for aviso in avisos[:10]:
+                card = QFrame()
+                tipo = aviso.get("tipo", "info")
+                
+                # Cores inspiradas no seu painel Admin do Master!
+                cor_borda = "#0078d7" if tipo == "info" else "#ffc107" if tipo == "warning" else "#dc3545" if tipo == "erro" else "#28a745"
+                
+                card.setStyleSheet(f"background-color: #242424; border: 1px solid {cor_borda}; border-left: 5px solid {cor_borda}; border-radius: 6px; margin-bottom: 5px;")
+                lay_card = QVBoxLayout(card)
+                
+                lbl_tit = QLabel(f"<b>{aviso.get('titulo', 'Aviso')}</b>")
+                lbl_tit.setStyleSheet("font-size: 14px; border: none; color: white;")
+                lbl_tit.setWordWrap(True)
+                
+                lbl_msg = QLabel(aviso.get('mensagem', ''))
+                lbl_msg.setStyleSheet("font-size: 13px; color: #ccc; border: none;")
+                lbl_msg.setWordWrap(True)
+                
+                lay_card.addWidget(lbl_tit)
+                lay_card.addWidget(lbl_msg)
+                lay_conteudo.addWidget(card)
+                
+        lay_conteudo.addStretch()
+        scroll.setWidget(conteudo)
+        layout.addWidget(scroll)
+        
+        btn_ok = QPushButton("Fechar")
+        btn_ok.setStyleSheet("background-color: #555; color: white; font-weight: bold; padding: 10px;")
         btn_ok.setCursor(Qt.PointingHandCursor)
         btn_ok.clicked.connect(self.accept)
         layout.addWidget(btn_ok)
@@ -1343,10 +1574,190 @@ class TutorialOverlay(QWidget):
             painter.drawRoundedRect(rect, 8, 8)
 
 # --- APLICATIVO PRINCIPAL ---
+
+# --- ASSISTENTE DE CRIAÇÃO PASSO A PASSO ---
+class AssistenteIADialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        import idiomas
+        self.setWindowTitle(idiomas.tr("ast_title"))
+        self.setFixedSize(500, 400)
+        self.prompt_final = ""
+        self.init_ui()
+
+    def init_ui(self):
+        import idiomas
+        layout_principal = QVBoxLayout(self)
+        
+        self.stack = QStackedWidget()
+        layout_principal.addWidget(self.stack)
+
+        # -- PÁGINA 0: Boas Vindas --
+        page0 = QWidget()
+        vbox0 = QVBoxLayout(page0)
+        lbl_tit0 = QLabel(f"<h2>{idiomas.tr('ast_p0_tit')}</h2>")
+        lbl_tit0.setAlignment(Qt.AlignCenter)
+        lbl_msg0 = QLabel(idiomas.tr("ast_p0_msg"))
+        lbl_msg0.setWordWrap(True)
+        lbl_msg0.setAlignment(Qt.AlignCenter)
+        lbl_msg0.setStyleSheet("font-size: 14px;")
+        vbox0.addStretch()
+        vbox0.addWidget(lbl_tit0)
+        vbox0.addWidget(lbl_msg0)
+        vbox0.addStretch()
+        self.stack.addWidget(page0)
+
+        # -- PÁGINA 1: Quantidade de Slides --
+        page1 = QWidget()
+        vbox1 = QVBoxLayout(page1)
+        lbl_tit1 = QLabel(f"<h3>{idiomas.tr('ast_p1_tit')}</h3>")
+        lbl_msg1 = QLabel(idiomas.tr("ast_p1_msg"))
+        lbl_msg1.setWordWrap(True)
+        self.combo_qtd = QComboBox()
+        self.combo_qtd.addItems([str(i) for i in range(1, 21)]) # 1 a 20 slides
+        self.combo_qtd.setCurrentIndex(9) # Padrão em 10
+        self.combo_qtd.setStyleSheet("font-size: 16px; padding: 5px;")
+        vbox1.addStretch()
+        vbox1.addWidget(lbl_tit1)
+        vbox1.addWidget(lbl_msg1)
+        vbox1.addWidget(self.combo_qtd)
+        vbox1.addStretch()
+        self.stack.addWidget(page1)
+
+        # -- PÁGINA 2: Tema --
+        page2 = QWidget()
+        vbox2 = QVBoxLayout(page2)
+        lbl_tit2 = QLabel(f"<h3>{idiomas.tr('ast_p2_tit')}</h3>")
+        lbl_msg2 = QLabel(idiomas.tr("ast_p2_msg"))
+        lbl_msg2.setWordWrap(True)
+        self.txt_tema_ast = QTextEdit()
+        self.txt_tema_ast.setPlaceholderText("...")
+        vbox2.addWidget(lbl_tit2)
+        vbox2.addWidget(lbl_msg2)
+        vbox2.addWidget(self.txt_tema_ast)
+        self.stack.addWidget(page2)
+
+        # -- PÁGINA 3: Imagens --
+        page3 = QWidget()
+        vbox3 = QVBoxLayout(page3)
+        lbl_tit3 = QLabel(f"<h3>{idiomas.tr('ast_p3_tit')}</h3>")
+        lbl_msg3 = QLabel(idiomas.tr("ast_p3_msg"))
+        lbl_msg3.setWordWrap(True)
+        self.combo_img = QComboBox()
+        self.combo_img.setStyleSheet("font-size: 16px; padding: 5px;")
+        vbox3.addStretch()
+        vbox3.addWidget(lbl_tit3)
+        vbox3.addWidget(lbl_msg3)
+        vbox3.addWidget(self.combo_img)
+        vbox3.addStretch()
+        self.stack.addWidget(page3)
+
+        # -- PÁGINA 4: Resumo --
+        page4 = QWidget()
+        vbox4 = QVBoxLayout(page4)
+        lbl_tit4 = QLabel(f"<h2>{idiomas.tr('ast_p4_tit')}</h2>")
+        lbl_tit4.setAlignment(Qt.AlignCenter)
+        self.lbl_resumo = QLabel()
+        self.lbl_resumo.setWordWrap(True)
+        self.lbl_resumo.setAlignment(Qt.AlignCenter)
+        self.lbl_resumo.setStyleSheet("font-size: 14px; background-color: rgba(0, 120, 215, 0.1); padding: 15px; border-radius: 8px;")
+        vbox4.addStretch()
+        vbox4.addWidget(lbl_tit4)
+        vbox4.addWidget(self.lbl_resumo)
+        vbox4.addStretch()
+        self.stack.addWidget(page4)
+
+        # -- CONTROLES DE NAVEGAÇÃO --
+        hbox_botoes = QHBoxLayout()
+        self.btn_voltar = QPushButton(idiomas.tr("ast_btn_voltar"))
+        self.btn_voltar.clicked.connect(self.voltar)
+        self.btn_voltar.hide() # Esconde na primeira tela
+        
+        self.btn_avancar = QPushButton(idiomas.tr("ast_btn_avancar"))
+        self.btn_avancar.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold;")
+        self.btn_avancar.clicked.connect(self.avancar)
+        
+        hbox_botoes.addWidget(self.btn_voltar)
+        hbox_botoes.addStretch()
+        hbox_botoes.addWidget(self.btn_avancar)
+        layout_principal.addLayout(hbox_botoes)
+
+    def atualizar_combo_imagens(self):
+        import idiomas
+        self.combo_img.clear()
+        qtd_slides = int(self.combo_qtd.currentText())
+        self.combo_img.addItem(idiomas.tr("ast_p3_opt_todos"), "todos")
+        for i in range(1, qtd_slides + 1):
+            self.combo_img.addItem(f"{i} slide(s)", str(i))
+        self.combo_img.addItem(idiomas.tr("ast_p3_opt_nenhum"), "0")
+
+    def voltar(self):
+        idx = self.stack.currentIndex()
+        if idx > 0:
+            self.stack.setCurrentIndex(idx - 1)
+        self.atualizar_botoes()
+
+    def avancar(self):
+        import idiomas
+        idx = self.stack.currentIndex()
+        
+        # Validação do Tema
+        if idx == 2 and not self.txt_tema_ast.toPlainText().strip():
+            QMessageBox.warning(self, idiomas.tr("msg_aviso"), "Por favor, digite o tema da apresentação para continuar.")
+            return
+
+        if idx == 1:
+            self.atualizar_combo_imagens()
+            
+        if idx == 2:
+            pass # Avança normal
+
+        if idx == 3:
+            # Prepara o resumo antes de mostrar a última tela
+            qtd = self.combo_qtd.currentText()
+            tema = self.txt_tema_ast.toPlainText().strip()
+            imgs = self.combo_img.currentText()
+            self.lbl_resumo.setText(idiomas.tr("ast_p4_resumo").format(qtd, tema, imgs))
+            self.stack.setCurrentIndex(idx + 1)
+            self.atualizar_botoes()
+            return
+
+        if idx == 4:
+            # FINALIZAR! Monta o prompt formatado
+            qtd = self.combo_qtd.currentText()
+            tema = self.txt_tema_ast.toPlainText().strip()
+            img_val = self.combo_img.currentData()
+            
+            txt_regra_img = ""
+            if img_val == "0":
+                txt_regra_img = "NÃO inclua sugestões de imagens em nenhum slide."
+            elif img_val == "todos":
+                txt_regra_img = "Inclua sugestões de imagens em TODOS os slides."
+            else:
+                txt_regra_img = f"Inclua sugestões de imagens em exatamente {img_val} slides."
+
+            self.prompt_final = f"Tema Principal: {tema}\n\n[Regras do Assistente - STRICT]:\n- Crie exatamente {qtd} slides.\n- {txt_regra_img}"
+            self.accept()
+            return
+
+        self.stack.setCurrentIndex(idx + 1)
+        self.atualizar_botoes()
+
+    def atualizar_botoes(self):
+        import idiomas
+        idx = self.stack.currentIndex()
+        self.btn_voltar.setVisible(idx > 0)
+        
+        if idx == 4:
+            self.btn_avancar.setText(idiomas.tr("ast_btn_gerar"))
+            self.btn_avancar.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 8px;")
+        else:
+            self.btn_avancar.setText(idiomas.tr("ast_btn_avancar"))
+            self.btn_avancar.setStyleSheet("background-color: #0078d7; color: white; font-weight: bold; padding: 5px;")
 class AppPaiVega(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SmartSlides Pro")
+        self.setWindowTitle("VegaSlides")
         self.resize(650, 650)
         
         # --- ÍCONE DA JANELA E BARRA DE TAREFAS ---
@@ -1383,6 +1794,9 @@ class AppPaiVega(QMainWindow):
         
         # Verifica se o atualizador deixou algum recado de novidades
         self.checar_notas_atualizacao()
+        
+        # O Radar do Megafone (Quadro de Avisos)
+        self.checar_avisos_startup()
 
     def load_config(self):
         import base64
@@ -1390,13 +1804,14 @@ class AppPaiVega(QMainWindow):
         default_config = {
             "license": "FREE", 
             "api_key": "", 
-            "model": "gemini-2.5-flash", 
+            "model": "", 
             "theme": "Escuro", 
             "zoom": 100,
             "idioma": "pt",
             "saas_elite_ativo": False,
             "saas_padrao_ativo": False,
-            "byok_ativo": False
+            "byok_ativo": False,
+            "app_editor": "Sistema (Padrão)"
         }
         
         if os.path.exists(CONFIG_FILE):
@@ -1557,6 +1972,20 @@ class AppPaiVega(QMainWindow):
         self.btn_novidades.setCursor(Qt.PointingHandCursor)
         self.btn_novidades.clicked.connect(self.abrir_novidades)
         hbox_top.addWidget(self.btn_novidades)
+        
+        # --- BOTÃO DO QUADRO DE AVISOS ---
+        self.btn_avisos = QPushButton("📢 Avisos")
+        self.btn_avisos.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 5px;")
+        self.btn_avisos.setCursor(Qt.PointingHandCursor)
+        self.btn_avisos.clicked.connect(self.abrir_avisos)
+        hbox_top.addWidget(self.btn_avisos)
+        # ---------------------------------
+        
+        self.btn_conta = QPushButton("👤 Minha Conta")
+        self.btn_conta.setStyleSheet("background-color: #444; color: white; font-weight: bold; padding: 5px;")
+        self.btn_conta.setCursor(Qt.PointingHandCursor)
+        self.btn_conta.clicked.connect(self.abrir_conta)
+        hbox_top.addWidget(self.btn_conta)
         # ---------------------------------------------------------------
         
         self.main_layout.addLayout(hbox_top)
@@ -1590,16 +2019,24 @@ class AppPaiVega(QMainWindow):
         
         self.btn_gerar_ia = QPushButton("Criar Apresentação\nAutomática (IA)")
         self.btn_gerar_ia.setStyleSheet("background-color: #2b5c8f; color: white; font-weight: bold; padding: 10px;")
-        self.btn_gerar_ia.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding) # Libera o crescimento
+        self.btn_gerar_ia.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
         self.btn_gerar_ia.clicked.connect(self.gerar_com_ia)
+        
+        # --- NOVO BOTÃO ASSISTENTE ---
+        self.btn_assistente = QPushButton("✨ Criação\nAssistida")
+        self.btn_assistente.setStyleSheet("background-color: #17a2b8; color: white; font-weight: bold; padding: 10px;")
+        self.btn_assistente.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
+        self.btn_assistente.setCursor(Qt.PointingHandCursor)
+        self.btn_assistente.clicked.connect(self.abrir_dialogo_assistente)
         
         self.btn_historico = QPushButton("🕒 Recuperar\nSalvo")
         self.btn_historico.setStyleSheet("background-color: #555; color: white; font-weight: bold; padding: 10px;")
-        self.btn_historico.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding) # Libera o crescimento
+        self.btn_historico.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.MinimumExpanding)
         self.btn_historico.setCursor(Qt.PointingHandCursor)
         self.btn_historico.clicked.connect(self.abrir_historico)
         
         hbox_ia.addLayout(vbox_tema)
+        hbox_ia.addWidget(self.btn_assistente) # Injeta o assistente no meio
         hbox_ia.addWidget(self.btn_gerar_ia)
         hbox_ia.addWidget(self.btn_historico)
         self.main_layout.addLayout(hbox_ia)
@@ -1849,10 +2286,14 @@ class AppPaiVega(QMainWindow):
         self.btn_tutorial.setText(idiomas.tr("btn_tutorial"))
         self.btn_config.setText(idiomas.tr("btn_config"))
         self.btn_novidades.setText(idiomas.tr("btn_novidades"))
+        if hasattr(self, 'btn_avisos'):
+            self.btn_avisos.setText(idiomas.tr("btn_avisos"))
+        self.btn_conta.setText(idiomas.tr("btn_conta"))
         self.btn_load.setText(idiomas.tr("btn_load"))
         if not self.pptx_path: self.lbl_pptx.setText(idiomas.tr("lbl_pptx_vazio"))
         self.lbl_titulo_ia.setText(idiomas.tr("lbl_titulo_ia"))
         self.btn_gerar_ia.setText(idiomas.tr("btn_ia"))
+        self.btn_assistente.setText(idiomas.tr("btn_assistida"))
         self.btn_historico.setText(idiomas.tr("btn_historico"))
         self.lbl_presets.setText(idiomas.tr("lbl_presets"))
         self.lbl_cor_titulos.setText(idiomas.tr("lbl_cor_titulos"))
@@ -1894,6 +2335,8 @@ class AppPaiVega(QMainWindow):
             
             self.btn_gerar_ia.setEnabled(False)
             self.btn_gerar_ia.setStyleSheet("background-color: #555; color: #888; font-weight: bold; padding: 10px;")
+            self.btn_assistente.setEnabled(False)
+            self.btn_assistente.setStyleSheet("background-color: #555; color: #888; font-weight: bold; padding: 10px;")
         else:
             self.txt_tema.setReadOnly(False)
             self.txt_tema.setPlaceholderText(idiomas.tr("txt_tema_placeholder"))
@@ -1901,6 +2344,8 @@ class AppPaiVega(QMainWindow):
             
             self.btn_gerar_ia.setEnabled(True)
             self.btn_gerar_ia.setStyleSheet("background-color: #2b5c8f; color: white; font-weight: bold; padding: 10px;")
+            self.btn_assistente.setEnabled(True)
+            self.btn_assistente.setStyleSheet("background-color: #17a2b8; color: white; font-weight: bold; padding: 10px;")
 
     # --- O DETETIVE DE CLIQUES (AVISO PARA CONVERSÃO DE CLIENTE) ---
     def eventFilter(self, obj, event):
@@ -2087,10 +2532,17 @@ class AppPaiVega(QMainWindow):
         if not tema:
             QMessageBox.warning(self, "Aviso", "Por favor, introduza o tema primeiro!")
             return
+            
+        # O GOLPE DO IDIOMA: Injeta uma regra absoluta sem sujar a variável "tema" que vai pro histórico
+        tema_para_ia = f"{tema}\n\n[CRITICAL RULE: You MUST generate the entire presentation, all text, and the speaker script strictly in the EXACT SAME LANGUAGE as the topic requested above.]"
         
         api_key_usuario = self.config.get("api_key") if licensa == "BYOK (Sua Chave)" else None
-        modelo = self.config.get("model", "gemini-2.5-flash")
+        modelo = self.config.get("model", "")
         
+        if not modelo or "Busque" in modelo:
+            QMessageBox.warning(self, "Aviso", "Nenhum modelo de IA configurado! Vá em 'Configurações', clique em 'Buscar Modelos' e selecione um da lista antes de gerar a apresentação.")
+            return
+            
         sucesso_check, msg_check = motor_ia.testar_conectividade(api_key_usuario)
         if not sucesso_check:
             QMessageBox.critical(self, "Bloqueio na IA", f"Conexão recusada:\n\n{msg_check}")
@@ -2109,8 +2561,8 @@ class AppPaiVega(QMainWindow):
             self.btn_gerar_ia.setEnabled(False)
             self.btn_historico.setEnabled(False)
 
-            # Inicia o Trabalho Paralelo entregando todas as configs de IA
-            worker = WorkerIAGerador(tema, self.config)
+            # Inicia o Trabalho Paralelo entregando o tema blindado com a regra de idioma
+            worker = WorkerIAGerador(tema_para_ia, self.config)
             # Liga o progresso da thread direto na barra da tela
             worker.progresso.connect(lambda v, t: (progress.setValue(v), progress.setLabelText(t)))
             progress.canceled.connect(worker.requestInterruption)
@@ -2341,8 +2793,32 @@ class AppPaiVega(QMainWindow):
             self.lbl_pptx.setText("✨ Apresentação carregada e pronta para edição final!")
             
             try:
-                if os.name == 'nt': os.startfile(temp_path)
-                else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', temp_path])
+                import idiomas
+                editor = self.config.get("app_editor", idiomas.tr("editor_opt_system"))
+                caminho_absoluto = os.path.abspath(temp_path)
+                
+                if editor == idiomas.tr("editor_opt_none") or "Nenhum" in editor or "None" in editor:
+                    if os.name == 'nt':
+                        subprocess.Popen(f'explorer /select,"{caminho_absoluto}"')
+                    else:
+                        subprocess.Popen(['open', '-R', caminho_absoluto] if sys.platform == 'darwin' else ['xdg-open', os.path.dirname(caminho_absoluto)])
+                elif editor == "Microsoft PowerPoint":
+                    subprocess.Popen(["powerpnt", caminho_absoluto], shell=True)
+                elif editor == "LibreOffice Impress":
+                    subprocess.Popen(["soffice", "--impress", caminho_absoluto], shell=True)
+                else:
+                    try:
+                        if os.name == 'nt': os.startfile(caminho_absoluto)
+                        else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', caminho_absoluto])
+                    except Exception:
+                        # Se o Windows não souber o que é PPTX, não fazemos feio, abrimos a pasta.
+                        if os.name == 'nt':
+                            subprocess.Popen(f'explorer /select,"{caminho_absoluto}"')
+                        else:
+                            subprocess.Popen(['open', '-R', caminho_absoluto] if sys.platform == 'darwin' else ['xdg-open', os.path.dirname(caminho_absoluto)])
+                        
+                        import idiomas
+                        QMessageBox.information(self, idiomas.tr("msg_sys_editor_fail_tit"), idiomas.tr("msg_sys_editor_fail_msg"))
             except: pass
 
         except Exception as e:
@@ -2353,6 +2829,20 @@ class AppPaiVega(QMainWindow):
                 f.write(f"ERRO CRÍTICO NA IA:\n{erro_msg}")
             
             QMessageBox.critical(self, "Falha Fatal", f"O aplicativo encontrou um erro e gerou um log.\n\nSalvo em:\n{LOG_FILE}\n\nErro: {str(e)}")
+            
+    def abrir_dialogo_assistente(self):
+            licensa = self.config.get("license", "FREE")
+            if licensa == "FREE":
+                QMessageBox.warning(self, "Recurso Premium", "O Assistente de IA é um recurso Premium.")
+                return
+    
+            dialog = AssistenteIADialog(self)
+            if dialog.exec() == QDialog.Accepted:
+                # 1. Joga o texto perfeitamente estruturado na caixa para o usuário ver e aprender
+                self.txt_tema.setText(dialog.prompt_final)
+                
+                # 2. Já engatilha o processo automático para ele não precisar clicar em nada mais
+                self.gerar_com_ia()
             
     def abrir_historico(self):
         if not os.path.exists(HISTORICO_JSON_FILE):
@@ -2520,8 +3010,31 @@ class AppPaiVega(QMainWindow):
             # --- AUTO OPEN (Abre automaticamente o PPTX após edição) ---
             self.last_saved_pptx = save_path
             try:
-                if os.name == 'nt': os.startfile(save_path)
-                else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', save_path])
+                import idiomas
+                editor = self.config.get("app_editor", idiomas.tr("editor_opt_system"))
+                caminho_absoluto = os.path.abspath(save_path)
+                
+                if editor == idiomas.tr("editor_opt_none") or "Nenhum" in editor or "None" in editor:
+                    if os.name == 'nt':
+                        subprocess.Popen(f'explorer /select,"{caminho_absoluto}"')
+                    else:
+                        subprocess.Popen(['open', '-R', caminho_absoluto] if sys.platform == 'darwin' else ['xdg-open', os.path.dirname(caminho_absoluto)])
+                elif editor == "Microsoft PowerPoint":
+                    subprocess.Popen(["powerpnt", caminho_absoluto], shell=True)
+                elif editor == "LibreOffice Impress":
+                    subprocess.Popen(["soffice", "--impress", caminho_absoluto], shell=True)
+                else:
+                    try:
+                        if os.name == 'nt': os.startfile(caminho_absoluto)
+                        else: subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', caminho_absoluto])
+                    except Exception:
+                        if os.name == 'nt':
+                            subprocess.Popen(f'explorer /select,"{caminho_absoluto}"')
+                        else:
+                            subprocess.Popen(['open', '-R', caminho_absoluto] if sys.platform == 'darwin' else ['xdg-open', os.path.dirname(caminho_absoluto)])
+                        
+                        import idiomas
+                        QMessageBox.information(self, idiomas.tr("msg_sys_editor_fail_tit"), idiomas.tr("msg_sys_editor_fail_msg"))
             except: pass
 
         except Exception as e:
@@ -2533,9 +3046,11 @@ class AppPaiVega(QMainWindow):
         # Estrutura da Mágica Definitiva: (Widget Alvo, Título, Texto)
         passos = [
             (self.btn_config, idiomas.tr("tut_p1_tit"), idiomas.tr("tut_p1_txt")),
+            (self.btn_config, idiomas.tr("tut_p1b_tit"), idiomas.tr("tut_p1b_txt")),
             (self.btn_novidades, idiomas.tr("tut_p2_tit"), idiomas.tr("tut_p2_txt")),
             (self.btn_load, idiomas.tr("tut_p3_tit"), idiomas.tr("tut_p3_txt")),
             (self.txt_tema, idiomas.tr("tut_p4_tit"), idiomas.tr("tut_p4_txt")),
+            (self.btn_assistente, idiomas.tr("tut_p4b_tit"), idiomas.tr("tut_p4b_txt")),
             (None, idiomas.tr("tut_p5_tit"), idiomas.tr("tut_p5_txt")), # Janela de Imagens
             (self.btn_historico, idiomas.tr("tut_p6_tit"), idiomas.tr("tut_p6_txt")),
             (self.combo_presets, idiomas.tr("tut_p7_tit"), idiomas.tr("tut_p7_txt")),
@@ -2586,6 +3101,54 @@ class AppPaiVega(QMainWindow):
             self.config["ultima_versao_vista"] = versao_real
             self.save_config()
             
+    def buscar_avisos_api(self):
+        try:
+            # Usa a variável global blindada do manifesto local
+            url = f"https://vegap-masterapp.hf.space/master/publico/avisos/{NOME_APP_MASTER}"
+            resposta = requests.get(url, timeout=5)
+            if resposta.status_code == 200:
+                return resposta.json()
+        except:
+            pass
+        return []
+
+    def checar_avisos_startup(self):
+        avisos = self.buscar_avisos_api()
+        if not avisos: return
+        
+        maior_id = max([a.get("id", 0) for a in avisos])
+        ultimo_lido = self.config.get("ultimo_aviso_lido", 0)
+        
+        # Só pula na tela se tiver um ID maior que o último que ele leu
+        if maior_id > ultimo_lido:
+            self.config["ultimo_aviso_lido"] = maior_id
+            self.save_config()
+            
+            zoom_atual = self.config.get("zoom", 100)
+            dialog = AvisosDialog(avisos, zoom_atual, self)
+            dialog.exec()
+
+    def abrir_avisos(self):
+        import idiomas
+        self.btn_avisos.setText(idiomas.tr("btn_buscando"))
+        self.btn_avisos.setEnabled(False)
+        QApplication.processEvents()
+        
+        avisos = self.buscar_avisos_api()
+        
+        # Se o cara clicou pra ver, atualiza a memória pra não perturbar mais ele no startup
+        if avisos:
+            maior_id = max([a.get("id", 0) for a in avisos])
+            self.config["ultimo_aviso_lido"] = maior_id
+            self.save_config()
+            
+        self.btn_avisos.setText(idiomas.tr("btn_avisos"))
+        self.btn_avisos.setEnabled(True)
+        
+        zoom_atual = self.config.get("zoom", 100)
+        dialog = AvisosDialog(avisos, zoom_atual, self)
+        dialog.exec()
+
     def abrir_novidades(self):
         import idiomas
         # BUSCA AO VIVO NO BACKEND DO MASTER
@@ -2641,6 +3204,30 @@ class AppPaiVega(QMainWindow):
         dialog = NovidadesDialog(versao_nuvem, notas_formatadas, zoom_atual, self)
         dialog.exec()
 
+    def abrir_conta(self):
+        token_atual = self.config.get("token_master", "")
+        if token_atual:
+            resp = QMessageBox.question(
+                self, 
+                "Minha Conta", 
+                "Você já está conectado à sua conta VegaTech.\n\nDeseja sair (Fazer Logout)?", 
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if resp == QMessageBox.Yes:
+                self.config["token_master"] = ""
+                self.config["byok_ativo"] = False
+                self.config["saas_padrao_ativo"] = False
+                self.config["saas_elite_ativo"] = False
+                self.config["license"] = "FREE"
+                self.save_config()
+                self.update_main_ui_lock()
+                QMessageBox.information(self, "Logout", "Você saiu da sua conta com sucesso.")
+        else:
+            dialog_auth = LoginCadastroDialog(self)
+            if dialog_auth.exec() == QDialog.Accepted:
+                self.config["token_master"] = dialog_auth.token_recebido
+                self.save_config()
+
     def export_to_pdf(self):
         # Tenta pegar o último que o usuário editou/salvou. Se não tiver, pega o que ele carregou no passo 1.
         alvo = self.last_saved_pptx if self.last_saved_pptx else self.pptx_path
@@ -2659,20 +3246,59 @@ class AppPaiVega(QMainWindow):
         QApplication.processEvents()
         
         try:
-            # 32 é o código do formato PDF no PowerPoint
-            powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
-            deck = powerpoint.Presentations.Open(os.path.abspath(alvo))
-            deck.SaveAs(os.path.abspath(pdf_path), 32)
-            deck.Close()
-            powerpoint.Quit()
+            caminho_absoluto = os.path.abspath(alvo)
+            pdf_absoluto = os.path.abspath(pdf_path)
+            sucesso = False
             
+            # 1. Tentativa Independente: LibreOffice (Modo Invisível)
+            libreoffice_path = None
+            if os.name == 'nt':
+                for path in [r"C:\Program Files\LibreOffice\program\soffice.exe", r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"]:
+                    if os.path.exists(path):
+                        libreoffice_path = path
+                        break
+                        
+            if libreoffice_path:
+                out_dir = os.path.abspath(os.path.dirname(pdf_absoluto))
+                comando = f'"{libreoffice_path}" --headless --convert-to pdf --outdir "{out_dir}" "{caminho_absoluto}"'
+                subprocess.run(comando, shell=True, check=True)
+                
+                # O LibreOffice salva com o nome original do pptx, então precisamos renomear caso o usuário tenha digitado um nome diferente
+                nome_gerado = os.path.join(out_dir, os.path.splitext(os.path.basename(caminho_absoluto))[0] + ".pdf")
+                if nome_gerado != pdf_absoluto and os.path.exists(nome_gerado):
+                    import shutil
+                    shutil.move(nome_gerado, pdf_absoluto)
+                sucesso = True
+                
+            else:
+                # 2. Fallback: Escravo da Microsoft apenas se não houver outra saída
+                try:
+                    import comtypes.client
+                    powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
+                    deck = powerpoint.Presentations.Open(caminho_absoluto)
+                    deck.SaveAs(pdf_absoluto, 32)
+                    deck.Close()
+                    powerpoint.Quit()
+                    sucesso = True
+                except Exception:
+                    import idiomas
+                    raise Exception(idiomas.tr("msg_pdf_independent_fail"))
+
             progress.close()
-            QMessageBox.information(self, "Sucesso", "Apresentação convertida para PDF com sucesso!")
-            
-            if os.name == 'nt': os.startfile(pdf_path)
+            if sucesso:
+                import idiomas
+                QMessageBox.information(self, idiomas.tr("msg_sucesso"), idiomas.tr("msg_pdf_independent_success"))
+                
+                # Abre a pasta e seleciona o PDF pra mastigar e colocar na boca do cliente
+                if os.name == 'nt':
+                    subprocess.Popen(f'explorer /select,"{pdf_absoluto}"')
+                else:
+                    subprocess.Popen(['open', '-R', pdf_absoluto] if sys.platform == 'darwin' else ['xdg-open', os.path.dirname(pdf_absoluto)])
+                    
         except Exception as e:
             progress.close()
-            QMessageBox.critical(self, "Erro no PDF", f"Falha ao converter.\nVerifique se o PowerPoint não está com janelas de diálogo travando o fundo.\n\nDetalhes:\n{str(e)}")
+            import idiomas
+            QMessageBox.critical(self, idiomas.tr("msg_erro_pdf"), idiomas.tr("msg_pdf_fail_generic").format(str(e)))
             
 if __name__ == "__main__":
     if splash: splash.atualizar(85, "Verificando radares e atualizações do sistema...")
