@@ -6,7 +6,6 @@ class Idiomas {
   }
 
   static String tr(String chave) {
-    // Se não achar a chave, retorna a própria chave (mesma lógica do seu Python)
     return _dicionario[idiomaAtual]?[chave] ?? chave;
   }
 
@@ -36,7 +35,102 @@ class Idiomas {
       "cfg_lbl_tema": "Tema do Aplicativo:",
       "tema_escuro": "Escuro",
       "tema_claro": "Claro",
-      "cfg_lbl_idioma": "Idioma / Language:"
+      "cfg_lbl_idioma": "Idioma / Language:",
+      "cfg_tab_perfil": "👤 Minha Conta",
+      "cfg_btn_abrir_perfil": "👤 Abrir Painel da Conta",
+
+      // Botões e Ações Principais
+      "btn_ia_completo": "🚀 Criar Apresentação Automática (IA)",
+      "btn_guiado_completo": "✨ Criação Guiada",
+      "btn_smartart_completo": "➕ Inserir SmartArt (/forma)",
+      "btn_recuperar_completo": "🕒 Recuperar Salvo (Reabrir)",
+      "btn_load": "1. Carregar Apresentação Pronta (.pptx)",
+      "lbl_pptx_vazio": "Nenhum arquivo selecionado",
+      "btn_save": "6. Processar Apresentação e Salvar",
+      "btn_pdf": "7. Converter apresentação atual para PDF",
+      "pdf_confirm_titulo": "Confirmar Conversão para PDF",
+      "pdf_confirm_msg": "Você vai converter a apresentação que foi gerada para PDF.\n\nÉ exatamente o que você quer?",
+
+      // Mini-slide & Estilizador
+      "lbl_preview_placeholder_img": "IMAGEM\n(FOTO)",
+      "lbl_preview_text_title": "Título Exemplo",
+      "lbl_preview_text_body": "Este é o corpo do texto.\nVeja como ele cresce e muda.",
+      "chk_barra_lateral": "5.3. Exibir barra azul lateral",
+      "chk_scale": "5. Escala das imagens:",
+      "chk_text_scale": "5.1. Aumentar textos em:",
+      "chk_notes": "5.2. Inserir Roteiro do Apresentador nas anotações nativas",
+
+      // Presets
+      "lbl_presets": "✨ Formatações Prontas (Presets):",
+      "preset_manual": "Personalizado (Manual)",
+      "preset_corp": "Corporativo Azul",
+      "preset_dark": "Dark Mode Clássico",
+      "preset_clean": "Minimalista Clean",
+      "font_default": "Padrão do Tema",
+
+      // Modal 1: ImageSelectionDialog
+      "img_sel_titulo": "Escolha as Imagens dos Slides",
+      "img_sel_btn_concluir": "Concluir Escolhas e Gerar PPTX",
+      "img_sel_sem_img": "❌ NÃO USAR NENHUMA IMAGEM NESTE SLIDE",
+      "img_sel_selecionada": "✅ IMAGEM SELECIONADA",
+      "img_sel_escolher": "Escolher esta imagem",
+      "img_sel_contexto": "Contexto: {}",
+
+      // Modal 2: RevisorElementosDialog
+      "rev_titulo": "Revisão Visual de Slides - VegaSlides",
+      "rev_modo_label": "Modo de Visualização:",
+      "rev_modo_foco": "🔍 Foco Individual (Um por Vez)",
+      "rev_modo_lista": "📋 Ver Tudo em Lista",
+      "rev_btn_concluir": "✅ Concluir Revisão e Finalizar PPTX",
+      "rev_btn_anterior": "◀ Anterior",
+      "rev_btn_proximo": "Próximo ▶",
+      "rev_elemento_contador": "Elemento {} de {}",
+      "rev_vazio": "Nenhum card ou forma para revisar nesta apresentação.",
+      "rev_slide_card_tit": "Slide {}: {} — Card {}",
+      "rev_slide_card_edit": "Slide {}: {} — Editando Card {}",
+      "rev_card_tit_lbl": "Título do Card:",
+      "rev_card_corpo_lbl": "Conteúdo do Card:",
+      "rev_card_tam_lbl": "Tamanho do Texto:",
+      "rev_aviso_transbordo": "⚠️ Risco de transbordo no slide",
+      "rev_slide_forma_tit": "Slide {}: {} — Estrutura SmartArt ({})",
+      "rev_forma_centro_lbl": "Conceito Central:",
+      "rev_forma_itens_lbl": "Itens da Estrutura:",
+
+      // Assistente IA
+      "ast_title": "Assistente de Criação Passo a Passo",
+      "ast_btn_voltar": "⬅️ Voltar",
+      "ast_btn_avancar": "Avançar ➡️",
+      "ast_btn_gerar": "🚀 Gerar Apresentação",
+      "ast_p0_tit": "Bem-vindo ao Assistente!",
+      "ast_p0_msg": "Vamos criar sua apresentação juntos em 3 passos simples.\n\nEu vou fazer algumas perguntas fáceis e, com base nas suas respostas, montarei o comando perfeito para a Inteligência Artificial.\n\nClique em 'Avançar' para começar.",
+      "ast_p1_tit": "Passo 1: Quantidade de Slides",
+      "ast_p1_msg": "Quantos slides você quer que a apresentação tenha no total?",
+      "ast_p2_tit": "Passo 2: O Tema",
+      "ast_p2_msg": "Sobre o que é a sua apresentação? (Ex: 'Reunião de resultados do trimestre', 'Aula sobre a Revolução Francesa')",
+      "ast_p3_tit": "Passo 3: Imagens",
+      "ast_p3_msg": "Você quer que a IA sugira imagens para os slides? Se sim, em quantos deles?",
+      "ast_p3_opt_todos": "Em todos os slides",
+      "ast_p3_opt_nenhum": "Não quero imagens",
+      "ast_p4_tit": "Resumo da Obra",
+      "ast_p4_resumo": "Tudo pronto!\n\nVocê pediu uma apresentação com {} slides sobre o tema:\n'{}'\n\nImagens solicitadas para: {}.\n\nClique em 'Gerar Apresentação' para a IA assumir o controle!",
+
+      // Avisos & Novidades
+      "avisos_titulo": "📢 Quadro de Avisos",
+      "avisos_header": "Avisos Importantes do Sistema:",
+      "avisos_vazio": "Nenhum aviso no momento.",
+      "avisos_btn_fechar": "Fechar",
+      "btn_novidades": "📋 Novidades",
+      "nov_janela": "📋 Novidades - VegaSlides ({})",
+      "nov_header": "O que há de novo na versão {}:",
+      "nov_btn_ok": "Entendi",
+
+      // Recuperar Salvo
+      "recup_titulo": "Recuperar e Editar Apresentação",
+      "recup_instrucao": "Escolha a apresentação para carregar ou reeditar:",
+      "recup_btn_cancelar": "Cancelar",
+      "recup_btn_abrir": "✔ Abrir e Reeditar (Zero IA)",
+      "recup_vazio_titulo": "Histórico Vazio",
+      "recup_vazio_msg": "Você ainda não tem apresentações salvas localmente.",
     },
     "en": {
       "btn_conta": "My Account",
@@ -63,7 +157,102 @@ class Idiomas {
       "cfg_lbl_tema": "App Theme:",
       "tema_escuro": "Dark",
       "tema_claro": "Light",
-      "cfg_lbl_idioma": "Language / Idioma:"
+      "cfg_lbl_idioma": "Language / Idioma:",
+      "cfg_tab_perfil": "👤 My Account",
+      "cfg_btn_abrir_perfil": "👤 Open Account Panel",
+
+      // Buttons and Main Actions
+      "btn_ia_completo": "🚀 Create Automatic Presentation (AI)",
+      "btn_guiado_completo": "✨ Guided Creation",
+      "btn_smartart_completo": "➕ Insert SmartArt (/shape)",
+      "btn_recuperar_completo": "🕒 Recover Saved (Reopen)",
+      "btn_load": "1. Load Ready Presentation (.pptx)",
+      "lbl_pptx_vazio": "No file selected",
+      "btn_save": "6. Process Presentation and Save",
+      "btn_pdf": "7. Convert current presentation to PDF",
+      "pdf_confirm_titulo": "Confirm PDF Conversion",
+      "pdf_confirm_msg": "You are about to convert the generated presentation to PDF.\n\nIs this exactly what you want?",
+
+      // Mini-slide & Styler
+      "lbl_preview_placeholder_img": "IMAGE\n(PHOTO)",
+      "lbl_preview_text_title": "Example Title",
+      "lbl_preview_text_body": "This is the body text.\nSee how it scales.",
+      "chk_barra_lateral": "5.3. Show blue sidebar",
+      "chk_scale": "5. Image Scale:",
+      "chk_text_scale": "5.1. Increase text size by:",
+      "chk_notes": "5.2. Insert Speaker Script in native notes",
+
+      // Presets
+      "lbl_presets": "✨ Ready Formats (Presets):",
+      "preset_manual": "Custom (Manual)",
+      "preset_corp": "Corporate Blue",
+      "preset_dark": "Classic Dark Mode",
+      "preset_clean": "Clean Minimalist",
+      "font_default": "Theme Default",
+
+      // Modal 1: ImageSelectionDialog
+      "img_sel_titulo": "Choose Slide Images",
+      "img_sel_btn_concluir": "Complete Choices and Generate PPTX",
+      "img_sel_sem_img": "❌ DO NOT USE ANY IMAGE ON THIS SLIDE",
+      "img_sel_selecionada": "✅ IMAGE SELECTED",
+      "img_sel_escolher": "Choose this image",
+      "img_sel_contexto": "Context: {}",
+
+      // Modal 2: RevisorElementosDialog
+      "rev_titulo": "Visual Slide Review - VegaSlides",
+      "rev_modo_label": "View Mode:",
+      "rev_modo_foco": "🔍 Single Focus (One by One)",
+      "rev_modo_lista": "📋 View All in List",
+      "rev_btn_concluir": "✅ Finish Review and Generate PPTX",
+      "rev_btn_anterior": "◀ Previous",
+      "rev_btn_proximo": "Next ▶",
+      "rev_elemento_contador": "Element {} of {}",
+      "rev_vazio": "No cards or shapes to review in this presentation.",
+      "rev_slide_card_tit": "Slide {}: {} — Card {}",
+      "rev_slide_card_edit": "Slide {}: {} — Editing Card {}",
+      "rev_card_tit_lbl": "Card Title:",
+      "rev_card_corpo_lbl": "Card Content:",
+      "rev_card_tam_lbl": "Text Size:",
+      "rev_aviso_transbordo": "⚠️ Risk of overflow on slide",
+      "rev_slide_forma_tit": "Slide {}: {} — SmartArt Structure ({})",
+      "rev_forma_centro_lbl": "Central Concept:",
+      "rev_forma_itens_lbl": "Structure Items:",
+
+      // Assistente IA
+      "ast_title": "Step-by-Step Creation Wizard",
+      "ast_btn_voltar": "⬅️ Back",
+      "ast_btn_avancar": "Next ➡️",
+      "ast_btn_gerar": "🚀 Generate Presentation",
+      "ast_p0_tit": "Welcome to the Wizard!",
+      "ast_p0_msg": "Let's create your presentation together in 3 simple steps.\n\nI will ask you a few easy questions, and based on your answers, I will build the perfect command for the AI.\n\nClick 'Next' to start.",
+      "ast_p1_tit": "Step 1: Number of Slides",
+      "ast_p1_msg": "How many slides do you want the presentation to have in total?",
+      "ast_p2_tit": "Step 2: The Topic",
+      "ast_p2_msg": "What is your presentation about? (E.g., 'Quarterly results meeting', 'Lesson on the French Revolution')",
+      "ast_p3_tit": "Step 3: Images",
+      "ast_p3_msg": "Do you want the AI to suggest images for the slides? If so, in how many of them?",
+      "ast_p3_opt_todos": "In all slides",
+      "ast_p3_opt_nenhum": "No images",
+      "ast_p4_tit": "Summary",
+      "ast_p4_resumo": "All set!\n\nYou asked for a presentation with {} slides on the topic:\n'{}'\n\nImages requested for: {}.\n\nClick 'Generate Presentation' for the AI to take over!",
+
+      // Avisos & Novidades
+      "avisos_titulo": "📢 Notice Board",
+      "avisos_header": "Important System Notices:",
+      "avisos_vazio": "No notices at this time.",
+      "avisos_btn_fechar": "Close",
+      "btn_novidades": "📋 What's New",
+      "nov_janela": "📋 What's New - VegaSlides ({})",
+      "nov_header": "What's new in version {}:",
+      "nov_btn_ok": "Got it",
+
+      // Recuperar Salvo
+      "recup_titulo": "Recover and Edit Presentation",
+      "recup_instrucao": "Choose a presentation to load or re-edit:",
+      "recup_btn_cancelar": "Cancel",
+      "recup_btn_abrir": "✔ Open & Re-edit (Zero AI)",
+      "recup_vazio_titulo": "Empty History",
+      "recup_vazio_msg": "You do not have any locally saved presentations yet.",
     }
   };
 }

@@ -49,7 +49,9 @@ _DICIONARIO = {
         "chk_notes": "5.2. Inserir Roteiro do Apresentador nas anotações nativas",
         "chk_barra_lateral": "5.3. Exibir barra azul lateral",
         "btn_save": "6. Processar Apresentação e Salvar",
-        "btn_pdf": "7. Converter o PPTX atual para PDF",
+        "btn_pdf": "7. Converter apresentação atual para PDF",
+        "pdf_confirm_titulo": "Confirmar Conversão para PDF",
+        "pdf_confirm_msg": "Você vai converter a apresentação que foi gerada para PDF.\n\nÉ exatamente o que você quer?",
         "txt_tema_lock": "🔒 Geração Inteligente bloqueada (Licença FREE). Clique aqui para assinar.",
         
         "cfg_title": "⚙️ Configurações do App",
@@ -176,8 +178,65 @@ _DICIONARIO = {
         "msg_aviso": "Aviso",
         "msg_erro_pdf": "Erro no PDF",
         
+        # Mini-slide Preview
+        "lbl_preview_placeholder_img": "IMAGEM\n(FOTO)",
+        
+        # Recuperar e Editar
+        "recup_titulo": "Recuperar e Editar Apresentação",
+        "recup_instrucao": "<b>Escolha a apresentação para carregar ou reeditar (Enter para confirmar):</b>",
+        "recup_btn_cancelar": "Cancelar",
+        "recup_btn_abrir": "✔ Abrir e Reeditar (Zero IA)",
+        "recup_vazio_titulo": "Histórico Vazio",
+        "recup_vazio_msg": "Você ainda não tem apresentações salvas localmente.",
+        "recup_nenhum_fisico": "Nenhuma apresentação física foi encontrada. Gere uma nova!",
+        
+        # Avisos Dialog
+        "avisos_titulo": "Quadro de Avisos",
+        "avisos_header": "Avisos Importantes do Sistema:",
+        "avisos_vazio": "Nenhum aviso no momento.",
+        "avisos_btn_fechar": "Fechar",
+        
+        # Modal 1: ImageSelectionDialog
+        "img_sel_titulo": "Escolha as Imagens dos Slides",
+        "img_sel_btn_concluir": "Concluir Escolhas e Gerar PPTX",
+        "img_sel_sem_img": "❌ NÃO USAR NENHUMA IMAGEM NESTE SLIDE",
+        "img_sel_selecionada": "✅ IMAGEM SELECIONADA",
+        "img_sel_escolher": "Escolher esta imagem",
+        "img_sel_contexto": "Contexto: {}",
+
+        # Modal 2: RevisorElementosDialog
+        "rev_titulo": "Revisão Visual de Slides - VegaSlides",
+        "rev_modo_label": "<b>Modo de Visualização:</b>",
+        "rev_modo_foco": "🔍 Foco Individual (Um por Vez)",
+        "rev_modo_lista": "📋 Ver Tudo em Lista",
+        "rev_btn_concluir": "✅ Concluir Revisão e Finalizar PPTX",
+        "rev_btn_anterior": "◀ Anterior",
+        "rev_btn_proximo": "Próximo ▶",
+        "rev_elemento_contador": "Elemento {} de {}",
+        "rev_vazio": "Nenhum card ou forma para revisar nesta apresentação.",
+        "rev_slide_card_tit": "<b>Slide {}: {}</b> — <i>Card {}</i>",
+        "rev_slide_card_edit": "<b>Slide {}: {}</b> — <i>Editando Card {}</i>",
+        "rev_card_tit_lbl": "<b>Título do Card:</b>",
+        "rev_card_corpo_lbl": "<b>Conteúdo do Card:</b>",
+        "rev_card_tam_lbl": "<b>Tamanho do Texto:</b>",
+        "rev_aviso_transbordo": "⚠️ Risco de transbordo no slide",
+        "rev_slide_forma_tit": "<b>Slide {}: {}</b> — <i>Estrutura SmartArt ({})</i>",
+        "rev_forma_centro_lbl": "<b>Conceito Central:</b>",
+        "rev_forma_itens_lbl": "<b>Itens da Estrutura:</b>",
+        
+        # Minha Conta (ConfigDialog)
+        "cfg_tab_perfil": "👤 Minha Conta",
+        "cfg_btn_abrir_perfil": "👤 Abrir Painel da Conta",
+        
         "msg_sys_editor_fail_tit": "App Padrão não encontrado",
         "msg_sys_editor_fail_msg": "Seu sistema não soube como abrir o arquivo da apresentação automaticamente.\n\nAbrimos a pasta onde o arquivo foi salvo para você. Recomendamos que vá em '⚙️ Configurações / Licença' > 'Editor' e mude a opção para o programa que você tem instalado.",
+        
+        "btn_ia_completo": "🚀 Criar Apresentação Automática (IA)",
+        "btn_guiado_completo": "✨ Criação Guiada",
+        "btn_smartart_completo": "➕ Inserir SmartArt (/forma)",
+        "btn_recuperar_completo": "🕒 Recuperar Salvo (Reabrir)",
+        "cfg_tab_perfil": "👤 Minha Conta",
+        "cfg_btn_abrir_perfil": "👤 Abrir Painel da Conta",
         
         "btn_assistida": "✨ Criação\nAssistida",
         "ast_title": "Assistente de Criação Passo a Passo",
@@ -235,7 +294,9 @@ _DICIONARIO = {
         "chk_notes": "5.2. Insert Speaker Script in native notes",
         "chk_barra_lateral": "5.3. Show blue sidebar",
         "btn_save": "6. Process Presentation and Save",
-        "btn_pdf": "7. Convert current PPTX to PDF",
+        "btn_pdf": "7. Convert current presentation to PDF",
+        "pdf_confirm_titulo": "Confirm PDF Conversion",
+        "pdf_confirm_msg": "You are about to convert the generated presentation to PDF.\n\nIs this exactly what you want?",
         "txt_tema_lock": "🔒 Smart Generation locked (FREE License). Click here to subscribe.",
         
         "cfg_title": "⚙️ App Settings",
@@ -348,6 +409,41 @@ _DICIONARIO = {
         "auth_btn_criar": "Create Account",
         "btn_conta": "👤 My Account",
         
+        # Modal 1: ImageSelectionDialog
+        "img_sel_titulo": "Choose Slide Images",
+        "img_sel_btn_concluir": "Complete Choices and Generate PPTX",
+        "img_sel_sem_img": "❌ DO NOT USE ANY IMAGE ON THIS SLIDE",
+        "img_sel_selecionada": "✅ IMAGE SELECTED",
+        "img_sel_escolher": "Choose this image",
+        "img_sel_contexto": "Context: {}",
+
+        # Modal 2: RevisorElementosDialog
+        "rev_titulo": "Visual Slide Review - VegaSlides",
+        "rev_modo_label": "<b>View Mode:</b>",
+        "rev_modo_foco": "🔍 Single Focus (One by One)",
+        "rev_modo_lista": "📋 View All in List",
+        "rev_btn_concluir": "✅ Finish Review and Generate PPTX",
+        "rev_btn_anterior": "◀ Previous",
+        "rev_btn_proximo": "Next ▶",
+        "rev_elemento_contador": "Element {} of {}",
+        "rev_vazio": "No cards or shapes to review in this presentation.",
+        "rev_slide_card_tit": "<b>Slide {}: {}</b> — <i>Card {}</i>",
+        "rev_slide_card_edit": "<b>Slide {}: {}</b> — <i>Editing Card {}</i>",
+        "rev_card_tit_lbl": "<b>Card Title:</b>",
+        "rev_card_corpo_lbl": "<b>Card Content:</b>",
+        "rev_card_tam_lbl": "<b>Text Size:</b>",
+        "rev_aviso_transbordo": "⚠️ Risk of overflow on slide",
+        "rev_slide_forma_tit": "<b>Slide {}: {}</b> — <i>SmartArt Structure ({})</i>",
+        "rev_forma_centro_lbl": "<b>Central Concept:</b>",
+        "rev_forma_itens_lbl": "<b>Structure Items:</b>",
+        
+        "btn_ia_completo": "🚀 Create Automatic Presentation (AI)",
+        "btn_guiado_completo": "✨ Guided Creation",
+        "btn_smartart_completo": "➕ Insert SmartArt (/shape)",
+        "btn_recuperar_completo": "🕒 Recover Saved (Reopen)",
+        "cfg_tab_perfil": "👤 My Account",
+        "cfg_btn_abrir_perfil": "👤 Open Account Panel",
+        
         "cfg_tab_editor": "Editor",
         "lbl_editor": "Program to open the presentation after generating:",
         "editor_detect_none": "⚠️ No editor detected on the system.",
@@ -361,6 +457,28 @@ _DICIONARIO = {
         "msg_erro": "Error",
         "msg_aviso": "Warning",
         "msg_erro_pdf": "PDF Error",
+        
+        # Mini-slide Preview
+        "lbl_preview_placeholder_img": "IMAGE\n(PHOTO)",
+        
+        # Recover & Edit
+        "recup_titulo": "Recover and Edit Presentation",
+        "recup_instrucao": "<b>Choose a presentation to load or re-edit (Enter to confirm):</b>",
+        "recup_btn_cancelar": "Cancel",
+        "recup_btn_abrir": "✔ Open & Re-edit (Zero AI)",
+        "recup_vazio_titulo": "Empty History",
+        "recup_vazio_msg": "You do not have any locally saved presentations yet.",
+        "recup_nenhum_fisico": "No physical presentation was found. Generate a new one!",
+        
+        # Notices Dialog
+        "avisos_titulo": "Notice Board",
+        "avisos_header": "Important System Notices:",
+        "avisos_vazio": "No notices at this time.",
+        "avisos_btn_fechar": "Close",
+        
+        # My Account (ConfigDialog)
+        "cfg_tab_perfil": "👤 My Account",
+        "cfg_btn_abrir_perfil": "👤 Open Account Panel",
         
         "msg_sys_editor_fail_tit": "Default App Not Found",
         "msg_sys_editor_fail_msg": "Your system didn't know how to open the presentation file automatically.\n\nWe opened the folder where the file was saved for you. We recommend going to '⚙️ Settings / License' > 'Editor' and changing the option to a program you have installed.",

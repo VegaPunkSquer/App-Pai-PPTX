@@ -1,4 +1,5 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:vegaslides/provider/theme_provider.dart';
@@ -6,6 +7,7 @@ import 'package:vegaslides/utils/idiomas.dart';
 import 'package:vegaslides/provider/auth_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vegaslides/screens/loja_screen.dart';
+import 'package:vegaslides/services/api_service.dart';
 
 class ConfigScreen extends StatefulWidget {
   const ConfigScreen({super.key});
@@ -17,11 +19,17 @@ class ConfigScreen extends StatefulWidget {
 class _ConfigScreenState extends State<ConfigScreen> {
   String _licencaAtual = 'FREE';
   String _iaProvider = 'gemini';
+  String _posGeracaoAcao = 'sistema'; // 'pasta' ou 'sistema'
 
   // Controladores de Conta
   final _emailController = TextEditingController();
   final _senhaController = TextEditingController();
+  bool _senhaOculta = true;
   bool _carregandoLogin = false;
+
+  // Estado do Perfil na Nuvem
+  Map<String, dynamic>? _dadosPerfil;
+  bool _carregandoPerfil = false;
 
   // Controladores das Chaves de IA
   final _geminiKeyController = TextEditingController();
@@ -32,13 +40,13 @@ class _ConfigScreenState extends State<ConfigScreen> {
   void initState() {
     super.initState();
     _carregarMemoria();
+    _carregarPerfilServidor();
   }
 
-  // CURA A AMNÉSIA: Filtra o lixo antigo e puxa o que tá salvo
   Future<void> _carregarMemoria() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
-      // O Filtro: Garante que o Flutter só leia a sigla exata que o Dropdown aceita
       String licencaSalva = prefs.getString('vega_license') ?? 'FREE';
       if (licencaSalva.contains('SAAS')) {
         _licencaAtual = 'SAAS';
@@ -49,9 +57,31 @@ class _ConfigScreenState extends State<ConfigScreen> {
       }
 
       _iaProvider = prefs.getString('vega_provider') ?? 'gemini';
+      _posGeracaoAcao = prefs.getString('vega_pos_geracao') ?? 'sistema';
       _geminiKeyController.text = prefs.getString('vega_api_key') ?? '';
       _cfAccountController.text = prefs.getString('vega_cf_account') ?? '';
       _cfTokenController.text = prefs.getString('vega_cf_token') ?? '';
+    });
+  }
+
+  Future<void> _carregarPerfilServidor() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (!auth.isAuth || auth.token == null) return;
+
+    setState(() => _carregandoPerfil = true);
+    final dados = await ApiService.obterPerfil(auth.token!);
+    if (!mounted) return;
+
+    setState(() {
+      _dadosPerfil = dados;
+      _carregandoPerfil = false;
+      if (dados.containsKey('plano')) {
+        final plano = dados['plano'].toString().toUpperCase();
+        if (plano != 'FREE' && plano.isNotEmpty) {
+          _licencaAtual = plano.contains('BYOK') ? 'BYOK' : 'SAAS';
+          auth.atualizarLicenca(_licencaAtual);
+        }
+      }
     });
   }
 
@@ -77,8 +107,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
           elevation: 0,
           bottom: TabBar(
             isScrollable: true,
-            indicatorColor: const Color(0xFF8B5CF6), 
-            labelColor: const Color(0xFF8B5CF6),
+            indicatorColor: const Color(0xFF0078D7), 
+            labelColor: const Color(0xFF0078D7),
             unselectedLabelColor: Theme.of(context).brightness == Brightness.dark ? Colors.white54 : Colors.black54,
             tabs: [
               Tab(icon: const Icon(Icons.person), text: Idiomas.tr('btn_conta')),
@@ -120,41 +150,156 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   // ==========================================
-  // ABA 1: CONTA (COM INTEGRAÇÃO API)
+  // ABA 1: CONTA (MINHA CONTA / LOGIN)
   // ==========================================
   Widget _buildAbaConta() {
     final authProvider = Provider.of<AuthProvider>(context);
 
     if (authProvider.isAuth) {
-      return Padding(
-        padding: const EdgeInsets.all(24.0),
+      if (_carregandoPerfil && _dadosPerfil == null) {
+        return const Center(child: CircularProgressIndicator(color: Color(0xFF0078D7)));
+      }
+
+      final nome = _dadosPerfil?['nome'] ?? 'Usuário VegaTech';
+      final email = _dadosPerfil?['email'] ?? 'Conectado';
+      final cpf = _dadosPerfil?['documento'] ?? '-';
+      final criadoEm = _dadosPerfil?['criado_em'] ?? '-';
+      final plano = _dadosPerfil?['plano'] ?? _licencaAtual;
+      final fotoB64 = _dadosPerfil?['foto'];
+
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 64),
-            const SizedBox(height: 16),
-            const Text(
-              'Conta Conectada com Sucesso!',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const SizedBox(height: 10),
+            // Avatar Circular com Borda Neon Azul (#0078D7)
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFF0078D7), width: 3),
+              ),
+              child: ClipOval(
+                child: Builder(
+                  builder: (context) {
+                    if (fotoB64 != null && fotoB64.toString().isNotEmpty) {
+                      try {
+                        String cleanB64 = fotoB64.toString().trim();
+                        if (cleanB64.contains(',')) {
+                          cleanB64 = cleanB64.split(',').last;
+                        }
+                        cleanB64 = cleanB64.replaceAll('\n', '').replaceAll('\r', '');
+                        return Image.memory(
+                          base64Decode(cleanB64),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 60, color: Colors.grey),
+                        );
+                      } catch (e) {
+                        return const Icon(Icons.person, size: 60, color: Colors.grey);
+                      }
+                    }
+                    return const Icon(Icons.person, size: 60, color: Colors.grey);
+                  },
+                ),
+              ),
             ),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () async {
-                await authProvider.fazerLogout();
-                if (!mounted) return;
-                setState(() {});
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Logout realizado com sucesso.')),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+
+            // Card de Dados da Conta
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF222222),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF444444)),
               ),
-              child: const Text('Sair da Conta (Logout)', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'DADOS DA CONTA',
+                    style: TextStyle(color: Color(0xFF0078D7), fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Nome: $nome', style: const TextStyle(color: Colors.white, fontSize: 14)),
+                  const SizedBox(height: 6),
+                  Text('E-mail: $email', style: const TextStyle(color: Color(0xFFCCCCCC), fontSize: 14)),
+                  const SizedBox(height: 6),
+                  Text('CPF/CNPJ: $cpf', style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 14)),
+                  const SizedBox(height: 6),
+                  Text('Membro desde: $criadoEm', style: const TextStyle(color: Color(0xFF888888), fontSize: 13)),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Plano: $plano',
+                    style: const TextStyle(color: Color(0xFF28A745), fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Card de Segurança
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF222222),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF444444)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'SEGURANÇA',
+                    style: TextStyle(color: Color(0xFFAAAAAA), fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 1),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => _recuperarSenhaModal(context, email),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF333333),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: const BorderSide(color: Color(0xFF555555)),
+                        ),
+                      ),
+                      child: const Text('Trocar Minha Senha', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Botão de Logout
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () async {
+                  await authProvider.fazerLogout();
+                  if (!mounted) return;
+                  setState(() {
+                    _dadosPerfil = null;
+                    _licencaAtual = 'FREE';
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Você saiu da sua conta.')),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFA8201A),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Sair da Conta', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
+              ),
             ),
           ],
         ),
@@ -176,10 +321,24 @@ class _ConfigScreenState extends State<ConfigScreen> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _senhaController,
-            obscureText: true,
-            decoration: _inputDecoration(Idiomas.tr('auth_senha'), Icons.lock),
+            obscureText: _senhaOculta,
+            decoration: _inputDecoration(
+              Idiomas.tr('auth_senha'),
+              Icons.lock,
+              suffix: IconButton(
+                icon: Icon(_senhaOculta ? Icons.visibility : Icons.visibility_off, color: Colors.grey),
+                onPressed: () => setState(() => _senhaOculta = !_senhaOculta),
+              ),
+            ),
           ),
-          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => _recuperarSenhaModal(context, _emailController.text),
+              child: const Text('Esqueceu a senha?', style: TextStyle(color: Color(0xFF0078D7))),
+            ),
+          ),
+          const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _carregandoLogin ? null : () async {
               setState(() => _carregandoLogin = true);
@@ -190,24 +349,10 @@ class _ConfigScreenState extends State<ConfigScreen> {
                 );
                 
                 if (!mounted) return;
-
-                final prefs = await SharedPreferences.getInstance();
-                final saasPadrao = prefs.getBool('vega_saas_padrao') ?? false;
-                final saasElite = prefs.getBool('vega_saas_elite') ?? false;
-                final byok = prefs.getBool('vega_byok_ativo') ?? false;
-
-                if (!mounted) return;
-
-                setState(() {
-                  if (saasElite || saasPadrao) {
-                    _licencaAtual = 'SAAS';
-                  } else if (byok) {
-                    _licencaAtual = 'BYOK';
-                  }
-                });
+                await _carregarPerfilServidor();
 
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Login efetuado! Licença carregada.'), backgroundColor: Colors.green),
+                  const SnackBar(content: Text('Login efetuado com sucesso!'), backgroundColor: Colors.green),
                 );
               } catch (e) {
                 if (!mounted) return;
@@ -255,7 +400,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('💳 GESTÃO DE PLANOS E ASSINATURAS', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text('💳 GESTÃO DE PLANOS E ASSINATURAS', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           Text(
             'Selecione a licença desejada abaixo para liberar a geração de apresentações. O plano SAAS ELITE desbloqueia a Inteligência Artificial da Cloudflare, enquanto o SAAS Padrão usa o Google Gemini.\n\n(Escolha o plano e clique em Salvar para abrir a loja)',
@@ -271,7 +416,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
               DropdownMenuItem(value: 'SAAS', child: Text(Idiomas.tr('lic_saas'))),
             ],
             onChanged: (val) {
-              setState(() => _licencaAtual = val!);
+              if (val != null) setState(() => _licencaAtual = val);
             },
           ),
         ],
@@ -319,7 +464,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             title: Text(Idiomas.tr('cfg_chk_gemini')),
             value: 'gemini',
             groupValue: _iaProvider,
-            activeColor: const Color(0xFF8B5CF6),
+            activeColor: const Color(0xFF0078D7),
             onChanged: (val) => setState(() => _iaProvider = val.toString()),
           ),
           
@@ -336,7 +481,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             title: Text(Idiomas.tr('cfg_chk_cf')),
             value: 'cloudflare',
             groupValue: _iaProvider,
-            activeColor: const Color(0xFF8B5CF6),
+            activeColor: const Color(0xFF0078D7),
             onChanged: (val) => setState(() => _iaProvider = val.toString()),
           ),
           
@@ -379,7 +524,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
               DropdownMenuItem(value: 'Claro', child: Text(Idiomas.tr('tema_claro'))),
             ],
             onChanged: (val) {
-              themeProvider.toggleTheme(val == 'Escuro');
+              if (val != null) themeProvider.toggleTheme(val == 'Escuro');
             },
           ),
           const SizedBox(height: 24),
@@ -391,9 +536,36 @@ class _ConfigScreenState extends State<ConfigScreen> {
               DropdownMenuItem(value: 'en', child: Text('English')),
             ],
             onChanged: (val) {
-              setState(() {
-                Idiomas.setIdioma(val!);
-              });
+              if (val != null) {
+                setState(() {
+                  Idiomas.setIdioma(val);
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 24),
+          DropdownButtonFormField<String>(
+            value: _posGeracaoAcao,
+            isExpanded: true,
+            decoration: _inputDecoration('Ação ao Concluir Geração:', Icons.file_present),
+            items: const [
+              DropdownMenuItem(
+                value: 'sistema',
+                child: Text(
+                  '⚡ Abrir com Visualizador (PowerPoint / Office)',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              DropdownMenuItem(
+                value: 'pasta',
+                child: Text(
+                  '📁 Abrir a Pasta Downloads',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) setState(() => _posGeracaoAcao = val);
             },
           ),
         ],
@@ -410,7 +582,6 @@ class _ConfigScreenState extends State<ConfigScreen> {
     String licencaSalva = prefs.getString('vega_license') ?? 'FREE';
 
     if (_licencaAtual == 'BYOK' || _licencaAtual == 'SAAS') {
-      
       if (!auth.isAuth) {
         final logou = await _mostrarModalAuth(auth);
         if (!mounted) return;
@@ -441,9 +612,14 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
         if (resultado != null && resultado is String) {
           final nomePlanoAlto = resultado.toUpperCase();
-          if (nomePlanoAlto.contains('ELITE')) await prefs.setBool('vega_saas_elite', true);
-          else if (nomePlanoAlto.contains('SAAS')) await prefs.setBool('vega_saas_padrao', true);
-          else if (nomePlanoAlto.contains('BYOK')) await prefs.setBool('vega_byok_ativo', true);
+          if (nomePlanoAlto.contains('ELITE')) {
+            await prefs.setBool('vega_saas_elite', true);
+          } else if (nomePlanoAlto.contains('SAAS')) {
+            await prefs.setBool('vega_saas_padrao', true);
+          } else if (nomePlanoAlto.contains('BYOK')) {
+            await prefs.setBool('vega_byok_ativo', true);
+          }
+          await _carregarPerfilServidor();
         } else {
           setState(() => _licencaAtual = licencaSalva);
           return;
@@ -455,12 +631,14 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   // ==========================================
-  // O MODAL DE LOGIN/CADASTRO INTELIGENTE
+  // MODAL DE LOGIN/CADASTRO INTELIGENTE COM OLHINHO
   // ==========================================
   Future<bool?> _mostrarModalAuth(AuthProvider auth) {
     final nomeCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
     final senhaCtrl = TextEditingController();
+    bool senhaOcultaLogin = true;
+    bool senhaOcultaCad = true;
     bool carregando = false;
 
     return showDialog<bool>(
@@ -473,7 +651,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
             child: DefaultTabController(
               length: 2,
               child: Container(
-                constraints: const BoxConstraints(maxHeight: 450),
+                constraints: const BoxConstraints(maxHeight: 480),
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
@@ -482,8 +660,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
                     const Text('Você precisa de uma conta para habilitar este plano.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
                     const TabBar(
                       tabs: [Tab(text: "Login"), Tab(text: "Cadastrar")],
-                      indicatorColor: Colors.blue,
-                      labelColor: Colors.blue,
+                      indicatorColor: Color(0xFF0078D7),
+                      labelColor: Color(0xFF0078D7),
                     ),
                     Expanded(
                       child: TabBarView(
@@ -493,14 +671,33 @@ class _ConfigScreenState extends State<ConfigScreen> {
                             children: [
                               TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'E-mail', border: OutlineInputBorder())),
                               const SizedBox(height: 12),
-                              TextField(controller: senhaCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Senha', border: OutlineInputBorder())),
-                              const SizedBox(height: 16),
+                              TextField(
+                                controller: senhaCtrl,
+                                obscureText: senhaOcultaLogin,
+                                decoration: InputDecoration(
+                                  labelText: 'Senha',
+                                  border: const OutlineInputBorder(),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(senhaOcultaLogin ? Icons.visibility : Icons.visibility_off, color: Colors.grey),
+                                    onPressed: () => setModalState(() => senhaOcultaLogin = !senhaOcultaLogin),
+                                  ),
+                                ),
+                              ),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () => _recuperarSenhaModal(ctx, emailCtrl.text),
+                                  child: const Text('Esqueceu a senha?', style: TextStyle(color: Color(0xFF0078D7))),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                               ElevatedButton(
                                 onPressed: carregando ? null : () async {
                                   setModalState(() => carregando = true);
                                   try {
                                     await auth.fazerLogin(emailCtrl.text.trim(), senhaCtrl.text);
                                     if (ctx.mounted) {
+                                      await _carregarPerfilServidor();
                                       Navigator.pop(ctx, true);
                                     }
                                   } catch (e) {
@@ -511,7 +708,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
                                     setModalState(() => carregando = false);
                                   }
                                 },
-                                child: carregando ? const CircularProgressIndicator(color: Colors.white) : const Text('Entrar'),
+                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0078D7)),
+                                child: carregando ? const CircularProgressIndicator(color: Colors.white) : const Text('Entrar', style: TextStyle(color: Colors.white)),
                               )
                             ],
                           ),
@@ -522,7 +720,18 @@ class _ConfigScreenState extends State<ConfigScreen> {
                               const SizedBox(height: 12),
                               TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'E-mail', border: OutlineInputBorder())),
                               const SizedBox(height: 12),
-                              TextField(controller: senhaCtrl, obscureText: true, decoration: const InputDecoration(labelText: 'Senha', border: OutlineInputBorder())),
+                              TextField(
+                                controller: senhaCtrl,
+                                obscureText: senhaOcultaCad,
+                                decoration: InputDecoration(
+                                  labelText: 'Senha',
+                                  border: const OutlineInputBorder(),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(senhaOcultaCad ? Icons.visibility : Icons.visibility_off, color: Colors.grey),
+                                    onPressed: () => setModalState(() => senhaOcultaCad = !senhaOcultaCad),
+                                  ),
+                                ),
+                              ),
                               const SizedBox(height: 16),
                               ElevatedButton(
                                 onPressed: carregando ? null : () async {
@@ -530,6 +739,7 @@ class _ConfigScreenState extends State<ConfigScreen> {
                                   try {
                                     await auth.fazerCadastro(nomeCtrl.text.trim(), emailCtrl.text.trim(), senhaCtrl.text);
                                     if (ctx.mounted) {
+                                      await _carregarPerfilServidor();
                                       Navigator.pop(ctx, true);
                                     }
                                   } catch (e) {
@@ -540,7 +750,8 @@ class _ConfigScreenState extends State<ConfigScreen> {
                                     setModalState(() => carregando = false);
                                   }
                                 },
-                                child: carregando ? const CircularProgressIndicator(color: Colors.white) : const Text('Criar Conta'),
+                                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF28A745)),
+                                child: carregando ? const CircularProgressIndicator(color: Colors.white) : const Text('Criar Conta', style: TextStyle(color: Colors.white)),
                               )
                             ],
                           ),
@@ -563,6 +774,11 @@ class _ConfigScreenState extends State<ConfigScreen> {
 
   Future<void> _gravarTudoEFechar(SharedPreferences prefs, String licencaDefinitiva, String apiKey, String cfAcc, String cfTok) async {
     await prefs.setString('vega_license', licencaDefinitiva);
+    await prefs.setString('vega_pos_geracao', _posGeracaoAcao);
+    
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    auth.atualizarLicenca(licencaDefinitiva);
+    
     await prefs.setString('vega_provider', _iaProvider);
     await prefs.setString('vega_api_key', apiKey);
     await prefs.setString('vega_cf_account', cfAcc);
@@ -577,17 +793,133 @@ class _ConfigScreenState extends State<ConfigScreen> {
   }
 
   // ==========================================
-  // WIDGET PADRÃO VEGATECH
+  // MODAL DE RECUPERAÇÃO EM 2 ETAPAS (CÓDIGO DE 6 DÍGITOS)
   // ==========================================
-  InputDecoration _inputDecoration(String label, IconData? icon) {
+  Future<void> _recuperarSenhaModal(BuildContext context, String emailAtual) async {
+    final emailRecCtrl = TextEditingController(text: emailAtual);
+    final codigoCtrl = TextEditingController();
+    final novaSenhaCtrl = TextEditingController();
+    bool etapaCodigo = false;
+    bool enviando = false;
+    bool novaSenhaOculta = true;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => AlertDialog(
+          title: Text(etapaCodigo ? 'Redefinir Senha' : 'Recuperar Senha', style: const TextStyle(fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!etapaCodigo) ...[
+                  const Text('Digite seu e-mail cadastrado para receber o código de verificação:'),
+                  const SizedBox(height: 12),
+                  TextField(controller: emailRecCtrl, decoration: const InputDecoration(labelText: 'E-mail', border: OutlineInputBorder())),
+                ] else ...[
+                  const Text('Digite o código de 6 dígitos enviado para seu e-mail e sua nova senha:'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: codigoCtrl,
+                    maxLength: 6,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(labelText: 'Código de 6 Dígitos', border: OutlineInputBorder(), counterText: ""),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: novaSenhaCtrl,
+                    obscureText: novaSenhaOculta,
+                    decoration: InputDecoration(
+                      labelText: 'Nova Senha',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(novaSenhaOculta ? Icons.visibility : Icons.visibility_off, color: Colors.grey),
+                        onPressed: () => setModalState(() => novaSenhaOculta = !novaSenhaOculta),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.red))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: etapaCodigo ? const Color(0xFF28A745) : const Color(0xFF0078D7),
+              ),
+              onPressed: enviando
+                  ? null
+                  : () async {
+                      if (!etapaCodigo) {
+                        final email = emailRecCtrl.text.trim();
+                        if (email.isEmpty) return;
+                        setModalState(() => enviando = true);
+                        try {
+                          await ApiService.recuperarSenha(email);
+                          setModalState(() {
+                            etapaCodigo = true;
+                            enviando = false;
+                          });
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Código de 6 dígitos enviado! Verifique seu e-mail.'), backgroundColor: Colors.green),
+                            );
+                          }
+                        } catch (e) {
+                          setModalState(() => enviando = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      } else {
+                        final cod = codigoCtrl.text.trim();
+                        final nova = novaSenhaCtrl.text;
+                        if (cod.isEmpty || nova.isEmpty) return;
+                        setModalState(() => enviando = true);
+                        try {
+                          await ApiService.confirmarRecuperacaoSenha(emailRecCtrl.text.trim(), cod, nova);
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Senha alterada com sucesso! Você já pode entrar.'), backgroundColor: Colors.green),
+                            );
+                          }
+                        } catch (e) {
+                          setModalState(() => enviando = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(content: Text(e.toString().replaceAll('Exception: ', '')), backgroundColor: Colors.red),
+                            );
+                          }
+                        }
+                      }
+                    },
+              child: enviando
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Text(etapaCodigo ? 'Confirmar Senha' : 'Enviar Código', style: const TextStyle(color: Colors.white)),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // WIDGET PADRÃO VEGATECH COM SUFFIX
+  // ==========================================
+  InputDecoration _inputDecoration(String label, IconData? icon, {Widget? suffix}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       labelText: label,
       prefixIcon: icon != null ? Icon(icon) : null,
+      suffixIcon: suffix,
       filled: true,
       fillColor: isDark ? const Color(0xFF1A1A1A) : Colors.white,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF8B5CF6), width: 2)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF0078D7), width: 2)),
     );
   }
 }

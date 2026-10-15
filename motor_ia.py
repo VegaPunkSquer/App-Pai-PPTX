@@ -64,30 +64,37 @@ def gerar_roteiro_slides(assunto_apresentacao, config_ia):
     Crie uma estrutura de apresentação espetacular baseada no assunto: "{assunto_apresentacao}".
     Retorne APENAS um array JSON válido. Nada de markdown ou crases em volta, só o JSON cru.
     
-    Regra de Ouro: Alterne os layouts. Escolha sabiamente entre estes 4 "tipo_layout":
+    Regra de Ouro: Alterne os layouts com base no assunto. Tipos de "tipo_layout":
     1. "padrao": Ideal para a maioria dos slides. Traz um texto base e pode ter imagem lateral.
-    2. "cards": Separa a informação em até 3 blocos/tópicos (ótimo para "benefícios", "fases", etc).
-    3. "destaque": Usado para frases de impacto ou quebra de seção. Fonte gigante, centralizado.
-    4. "grafico": Use APENAS quando houver dados numéricos, estatísticas ou comparações claras para exibir um gráfico de colunas.
+    2. "cards": Separa a informação em 3 blocos/tópicos organizados.
+    3. "destaque": Usado para frases de impacto ou quebra de seção.
+    4. "grafico": Use APENAS quando houver dados numéricos ou estatísticas claras.
+    5. "smartart": Se o tema contiver uma instrução explícita como "[FORMA: tipo | ITENS: N]", você DEVE obrigatoriamente criar pelo menos um slide com tipo_layout "smartart" e o bloco "smartart" preenchido com a estrutura e quantidade exata de itens pedidos.
 
     Formato do JSON estritamente exigido:
     [
         {{
             "titulo": "Título do slide",
             "tipo_layout": "padrao", 
-            "texto": "Parágrafo de explicação geral ou a frase de impacto.",
+            "texto": "Parágrafo de explicação geral ou frase.",
             "topicos": [
                 {{"icone": "🚀", "titulo": "Ponto 1", "texto": "Breve descrição."}}
             ],
+            "smartart": {{
+                "tipo": "pilares_comparativos",
+                "centro": "Conceito Central",
+                "itens": ["Item 1", "Item 2", "Item 3", "Item 4"]
+            }},
             "dados_grafico": {{
                 "categorias": ["2023", "2024", "2025"],
                 "valores": [10, 45, 80],
                 "nome_serie": "Crescimento"
             }},
-            "palavra_chave_imagem": "termo em ingles para o pexels (vazio se não for layout padrao)",
-            "roteiro_apresentador": "Texto fluido e persuasivo com o que o palestrante DEVE FALAR em voz alta enquanto este slide estiver na tela."
+            "palavra_chave_imagem": "termo em ingles para o pexels (vazio se nao for layout padrao)",
+            "roteiro_apresentador": "Texto fluido e persuasivo do apresentador."
         }}
     ]
+    Atenção crítica: "nome_serie" em "dados_grafico" DEVE ser uma única STRING (nunca uma lista).
     """
 
     if provedor == "cloudflare":
@@ -204,7 +211,10 @@ def baixar_imagem_pexels(palavra_chave, indice_slide):
                 for j, photo in enumerate(dados["photos"]):
                     url_imagem = photo["src"]["medium"]
                     img_data = requests.get(url_imagem).content
-                    img_path = os.path.join(base_dir, f"temp_slide_{indice_slide}_opt_{j}.jpg")
+                    # Salva na pasta de sessão do AppData para isolar o lixo temporário
+                    pasta_temp = os.path.join(os.getenv('APPDATA'), "VegaTech", "VegaSlides", "cache_sessao") if os.name == 'nt' else os.path.join(os.path.expanduser("~"), ".vegatech", "VegaSlides", "cache_sessao")
+                    os.makedirs(pasta_temp, exist_ok=True)
+                    img_path = os.path.join(pasta_temp, f"temp_slide_{indice_slide}_opt_{j}.jpg")
                     
                     with open(img_path, 'wb') as handler:
                         handler.write(img_data)
@@ -222,20 +232,33 @@ def baixar_imagem_pexels(palavra_chave, indice_slide):
 # ==========================================
 def extrair_json_puro(texto_resposta):
     texto = texto_resposta.strip()
+    dados = None
     match_lista = re.search(r'\[.*\]', texto, re.DOTALL)
     if match_lista:
-        try: return json.loads(match_lista.group(0))
+        try: dados = json.loads(match_lista.group(0))
         except: pass
             
-    match_dic = re.search(r'\{.*\}', texto, re.DOTALL)
-    if match_dic:
-        try: return json.loads(match_dic.group(0))
-        except: pass
-            
-    try:
-        return json.loads(texto)
-    except Exception as e:
-        return None, f"Falha ao decodificar JSON. Resposta bruta:\n{texto[:300]}...\nErro: {e}"
+    if not dados:
+        match_dic = re.search(r'\{.*\}', texto, re.DOTALL)
+        if match_dic:
+            try: dados = json.loads(match_dic.group(0))
+            except: pass
+
+    if not dados:
+        try: dados = json.loads(texto)
+        except Exception as e:
+            return None, f"Falha ao decodificar JSON. Resposta bruta:\n{texto[:300]}...\nErro: {e}"
+
+    # Sanitização: blinda dados_grafico contra listas no nome_serie antes de devolver para o app
+    if isinstance(dados, list):
+        for slide in dados:
+            if isinstance(slide, dict) and "dados_grafico" in slide and isinstance(slide["dados_grafico"], dict):
+                ns = slide["dados_grafico"].get("nome_serie", "Dados")
+                if isinstance(ns, list):
+                    slide["dados_grafico"]["nome_serie"] = str(ns[0]) if ns else "Dados"
+                else:
+                    slide["dados_grafico"]["nome_serie"] = str(ns)
+    return dados
 
 # ==========================================
 # 🔄 BUSCADORES DINÂMICOS

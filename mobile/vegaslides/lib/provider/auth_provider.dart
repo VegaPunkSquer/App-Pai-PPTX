@@ -5,20 +5,28 @@ import 'package:vegaslides/services/manifesto.dart';
 
 class AuthProvider with ChangeNotifier {
   String? _token;
+  String _licenca = 'FREE'; // <-- Memória RAM da licença
   
-  // Se tem token, o cara é VIP (tá logado)
   bool get isAuth => _token != null;
   String? get token => _token;
+  String get licenca => _licenca;
+  bool get isFree => _licenca == 'FREE' || _licenca.isEmpty;
 
   AuthProvider() {
     _carregarToken();
   }
 
-  // Busca na memória do celular assim que o app abre
   Future<void> _carregarToken() async {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('vega_token_master');
-    notifyListeners(); // Avisa o app inteiro que o status mudou
+    _licenca = prefs.getString('vega_license') ?? 'FREE'; // Lê o que foi salvo
+    notifyListeners(); 
+  }
+  
+  // Adicione este método para a Tela de Configurações poder atualizar a RAM na hora
+  void atualizarLicenca(String novaLicenca) {
+    _licenca = novaLicenca;
+    notifyListeners();
   }
 
   Future<void> fazerLogin(String email, String senha) async {
@@ -57,6 +65,8 @@ class AuthProvider with ChangeNotifier {
         await prefs.setString('vega_license', 'FREE');
       }
 
+      // MÁGICA DA RAM: Atualiza a licença para o app destravar na hora!
+      _licenca = prefs.getString('vega_license') ?? 'FREE';
       notifyListeners();
     }
   }
@@ -97,6 +107,8 @@ class AuthProvider with ChangeNotifier {
         await prefs.setString('vega_license', 'FREE');
       }
 
+      // MÁGICA DA RAM: Atualiza a licença para o app destravar na hora!
+      _licenca = prefs.getString('vega_license') ?? 'FREE';
       notifyListeners();
     }
   }

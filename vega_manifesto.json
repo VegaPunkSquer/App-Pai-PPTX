@@ -1,6 +1,6 @@
 {
     "nome": "VegaSlides",
-    "versao_atual": "v1.7.1",
+    "versao_atual": "v1.8.6",
     "repo": "https://github.com/VegaPunkSquer/App-Pai-PPTX",
     "builds": {
         "desktop": "exe.bat",
